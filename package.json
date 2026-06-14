@@ -1,0 +1,32 @@
+{
+  "name": "mp-card-creator",
+  "version": "1.0.0",
+  "description": "Агентный пайплайн генерации карточек товаров (силиконовые молды) для маркетплейсов Ozon и Wildberries.",
+  "main": "index.js",
+  "scripts": {
+    "api": "node infra/local-server.js",
+    "dev": "concurrently \"npm run api\" \"npm run --prefix frontend dev\"",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/totsamax/mp-card-creator.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/totsamax/mp-card-creator/issues"
+  },
+  "homepage": "https://github.com/totsamax/mp-card-creator#readme",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1067.0",
+    "@aws-sdk/client-s3": "^3.1067.0",
+    "@aws-sdk/client-sqs": "^3.1067.0",
+    "@aws-sdk/lib-dynamodb": "^3.1067.0",
+    "exceljs": "^4.4.0"
+  }
+}

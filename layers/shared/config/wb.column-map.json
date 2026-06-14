@@ -1,0 +1,25 @@
+{
+  "_comment": "Маппинг полей мастер-данных на колонки шаблона выгрузки Wildberries (структура отличается от Ozon)",
+  "columns": [
+    { "header": "Артикул поставщика",           "field": "article",        "suffix": "size" },
+    { "header": "Наименование",                  "field": "titleFull" },
+    { "header": "Описание",                      "field": "annotation" },
+    { "header": "Размер",                        "field": "size" },
+    { "header": "Размер личика (см)",            "field": "faceSize" },
+    { "header": "Длина предмета (см)",           "field": "moldLength" },
+    { "header": "Ширина предмета (см)",          "field": "moldWidth" },
+    { "header": "Высота предмета (см)",          "field": "moldHeight" },
+    { "header": "Вес товара с упаковкой (г)",   "field": "weightPacked" },
+    { "header": "Розничная цена",               "field": "priceBase" },
+    { "header": "Цена до скидки",               "field": "priceBase" },
+    { "header": "Ваша цена",                    "field": "priceDiscount" },
+    { "header": "Предмет",                      "field": "type" },
+    { "header": "Назначение",                   "field": "purpose" },
+    { "header": "Материал",                     "field": "material" },
+    { "header": "Цвет",                         "field": "color" },
+    { "header": "Бренд",                        "field": "brand" },
+    { "header": "Страна производства",          "field": "country" },
+    { "header": "Возрастное ограничение",       "field": "ageLimit" },
+    { "header": "Комплектация",                 "field": "set" }
+  ]
+}

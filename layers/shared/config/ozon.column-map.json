@@ -1,0 +1,33 @@
+{
+  "_comment": "Маппинг полей мастер-данных на колонки шаблона выгрузки Ozon (порядок соответствует порядку колонок в xlsx-шаблоне)",
+  "columns": [
+    { "header": "Артикул",                     "field": "article",        "suffix": "size" },
+    { "header": "Название",                     "field": "titleFull" },
+    { "header": "Краткое название",             "field": "titleShort" },
+    { "header": "Описание",                     "field": "annotation" },
+    { "header": "Размер",                       "field": "size" },
+    { "header": "Размер личика, см",            "field": "faceSize" },
+    { "header": "Длина, см",                    "field": "moldLength" },
+    { "header": "Ширина, см",                   "field": "moldWidth" },
+    { "header": "Высота, см",                   "field": "moldHeight" },
+    { "header": "Вес товара, г",                "field": "moldWeight" },
+    { "header": "Вес с упаковкой, г",           "field": "weightPacked" },
+    { "header": "Цена, ₽",                      "field": "priceBase" },
+    { "header": "Цена со скидкой, ₽",           "field": "priceDiscount" },
+    { "header": "Игрушка от, см",               "field": "toyFrom" },
+    { "header": "Игрушка до, см",               "field": "toyTo" },
+    { "header": "Тип",                          "field": "type" },
+    { "header": "Назначение",                   "field": "purpose" },
+    { "header": "Тематика",                     "field": "topic" },
+    { "header": "Материал",                     "field": "material" },
+    { "header": "Термостойкость",               "field": "heatResistance" },
+    { "header": "Многоразовый",                 "field": "reusable" },
+    { "header": "Пищевой",                      "field": "foodSafe" },
+    { "header": "Страна производства",          "field": "country" },
+    { "header": "Возрастное ограничение",       "field": "ageLimit" },
+    { "header": "Упаковка",                     "field": "packaging" },
+    { "header": "Комплект",                     "field": "set" },
+    { "header": "Категория Ozon",               "field": "categoryOzon" },
+    { "header": "Бренд",                        "field": "brand" }
+  ]
+}

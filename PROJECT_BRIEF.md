@@ -196,26 +196,24 @@ Cloud Function и делает каждую попытку отдельной, �
 
 ## 5. Хранение результатов и версионирование
 
+Манифесты хранятся в **Yandex Database (YDB Serverless, Document API)**,
+артефакты — в **Yandex Object Storage**. При недоступности облака
+`versionStore` прозрачно переключается на локальный диск (фолбэк).
+
+Структура ключей в Object Storage (и зеркально на диске в фолбэке):
 ```
-output/
-└── 0553/
-    ├── manifest.json          # история версий всех шагов
-    ├── master-data/v1.json, v2.json, ...
-    ├── texts/v1/, v2/...
-    ├── images/v1/, v2/...      # + overrides на отдельные файлы
-    ├── video/v1/...
-    ├── excel/v1/0553_ozon.xlsx, 0553_wb.xlsx
-    └── current/                # указатели на актуальные версии каждого шага
+{article}/{step}/v{N}/{artifact}
+# например: 0553/03-images/v2/M_infographic.png
 ```
 
-`manifest.json`:
+`manifest.json` (запись в YDB по ключу `article`):
 ```json
 {
   "article": "0553",
   "steps": {
     "01-normalize": { "currentVersion": 2, "history": [
       { "version": 1, "createdAt": "...", "inputHash": "abc123" },
-      { "version": 2, "createdAt": "...", "inputHash": "def456", "note": "поправили базовую цену" }
+      { "version": 2, "createdAt": "...", "inputHash": "def456" }
     ]},
     "03-images": { "currentVersion": 2, "history": [...],
       "overrides": { "M_infographic.png": "v2", "M_main.png": "v1" } }
@@ -225,137 +223,106 @@ output/
 
 Принципы:
 - **Каждый шаг — отдельная версия**, не перезаписывает предыдущую.
-- **Точечная перегенерация одного артефакта** через `overrides` (например,
-  пересоздать только инфографику для размера M, остальное — из старой
-  версии).
-- **Кэш по input-хэшу**: перед перегенерацией шаг сравнивает хэш входных
-  данных + конфига промпта с последней версией; если не изменился — шаг
-  пропускается (флаг `--force` для принудительного запуска). Особенно важно
+- **Точечная перегенерация одного артефакта** через `overrides`.
+- **Кэш по input-хэшу**: шаг сравнивает хэш входных данных + конфига промпта
+  с последней версией; если не изменился — шаг пропускается. Особенно важно
   для шагов 03/04 — они стоят денег за каждый вызов API.
-- **Откат**: `--revert=03-images:v1` переключает `current` на нужную версию.
+- **`force: true`** в теле запроса для принудительного перезапуска.
 
-В Yandex Cloud эта структура — не локальная папка, а ключи в **Object
-Storage** (бакет, например `mold-pipeline-output`), где префикс
-`0553/images/v2/M_infographic.png` и есть путь объекта. Сам `manifest.json`
-из-за конкурентных регенераций и инкрементов версий лучше хранить не как
-объект в Object Storage (риск гонок при read-modify-write), а как запись в
-**Yandex Database (YDB, серверлес, document/row API)** — атомарные апдейты
-полей `currentVersion`/`history`/`overrides` на уровне БД. Подробнее в
-разделе 9.
+**Фолбэк на локальный диск:**
+`versionStore` оборачивает каждый вызов к облаку в try/catch. При ошибке —
+предупреждение в лог и повтор через local-адаптер (файлы в `OUTPUT_DIR`).
+Фолбэк per-call: следующий вызов снова пробует облако. Переключение
+режимов — переменная `STORE_ADAPTER` (`cloud-with-fallback` / `yandex-cloud` / `local`).
 
 ---
 
-## 6. Структура проекта (Yandex Cloud, серверлес)
+## 6. Структура проекта
 
-Вместо одного Express-сервера и долгоживущего процесса — набор отдельных
-**Cloud Functions** (Node.js runtime), общий код подключается как **слой
-(layer)**, асинхронная цепочка шагов — через **Yandex Message Queue (YMQ)**.
+Рантайм — локальный Node.js-сервер. Шаги пайплайна — отдельные модули,
+вызываемые напрямую (без очереди). Хранилище — облако с фолбэком на диск.
 
 ```
-mold-card-pipeline/
-├── layers/
-│   └── shared/                   # общий код, подключается как Cloud Functions Layer
-│       ├── templateEngine.js     # формулы из template.master.json
-│       ├── versionStore.js       # YDB (манифест) + Object Storage (артефакты)
-│       ├── excelWriter.js        # exceljs
-│       └── config/               # template.master.json, column-map'ы, prompts.*.json
+mp-card-creator/
+├── layers/shared/
+│   ├── templateEngine.js     # формулы из template.master.json
+│   ├── versionStore.js       # cloud-with-fallback / yandex-cloud / local
+│   ├── excelWriter.js        # exceljs
+│   └── config/               # template.master.json, column-map'ы, prompts.*.json
 ├── functions/
-│   ├── api/                       # роутер для API Gateway (CRUD, манифест, триггеры регенерации)
-│   │   └── index.js
+│   ├── api/index.js          # HTTP-роутер (CRUD + запуск шагов)
 │   ├── step-normalize/index.js
 │   ├── step-texts/index.js
-│   ├── step-images/index.js       # OpenAI Images API
-│   ├── step-video/index.js        # kling.ai
+│   ├── step-images/index.js  # OpenAI Images API
+│   ├── step-video/index.js   # kling.ai
 │   ├── step-excel/index.js
 │   └── step-assemble/index.js
 ├── infra/
-│   ├── api-gateway.yaml            # OpenAPI-спека для API Gateway
-│   └── deploy.sh / terraform/      # развёртывание через yc CLI или Terraform
+│   └── local-server.js       # тонкая HTTP-обёртка, слушает :3001
 ├── frontend/
-│   └── PipelineApp.jsx             # хостится в Object Storage (статический сайт) + CDN
-└── input/
-    └── questionnaire.schema.json   # схема для формы (валидация)
+│   └── PipelineApp.jsx       # React-приложение, Vite, :5173
+├── input/
+│   └── questionnaire.schema.json
+└── output/                   # локальный фолбэк-диск (в .gitignore)
 ```
 
-Ключевые библиотеки: `exceljs`, `zod`, встроенный `fetch` для OpenAI
-Images API и kling.ai, YDB Node.js SDK (`ydb-sdk`), AWS SDK v3
-(совместим с Object Storage API Yandex Cloud, `@aws-sdk/client-s3`).
+Ключевые библиотеки: `exceljs`, встроенный `fetch`, `@aws-sdk/client-s3`,
+`@aws-sdk/client-dynamodb`, `@aws-sdk/lib-dynamodb`, `concurrently`.
 
 ---
 
-## 7. Frontend (готовый прототип)
+## 7. Frontend
 
-`PipelineApp.jsx` — React-компонент, реализует:
+`PipelineApp.jsx` — React-компонент (Vite), работает на `:5173`. Обращается
+к локальному API-серверу (`:3001`) через Vite-прокси `/api/*`.
 
+Реализует:
 - сайдбар со списком линеек (иконка-«лесенка» из 5 размеров + статус)
 - вкладка **«Опросник»** — форма со всеми полями из раздела 2
-- вкладка **«Результаты»** — степпер по 6 шагам пайплайна, выбор версии
-  каждого шага, точечная перегенерация отдельных артефактов (изображение,
-  видео), просмотр: таблицы мастер-данных, текстов, сетки изображений,
-  видео-плейсхолдеров, карточек Excel-выгрузки, дерева папки результата
+- вкладка **«Результаты»** — степпер по 6 шагам пайплайна, выбор версии,
+  точечная перегенерация, просмотр таблиц, изображений, xlsx-карточек
 
-Сейчас работает на моках (`MASTER_DATA`, `TEXTS`, `IMAGES`, `VIDEO`,
-`VERSIONS`, `ASSEMBLE_TREE`). Для интеграции — заменить эти константы на
-запросы к API Gateway (маршруты ведут на функцию `api`, которая читает
-манифест из YDB и при необходимости отдаёт presigned URL на объект в Object
-Storage):
-
+API-маршруты:
 ```
 GET  /lines
-GET  /lines/:id/steps/:step?version=N      -> данные шага + presigned URL'ы на файлы
-POST /lines/:id/steps/:step/regenerate     -> кладёт сообщение в YMQ
+GET  /lines/:id/steps/:step?version=N
+POST /lines/:id/steps/:step/regenerate
 POST /lines/:id/steps/:step/items/:item/regenerate
 GET  /lines/:id/manifest
-POST /lines                                 -> создание линейки из опросника
+POST /lines
 ```
 
-Сам `PipelineApp.jsx` хостится как статика в Object Storage (bucket со
-статическим веб-сайтом) + Yandex Cloud CDN перед ним; обращается к API
-Gateway по CORS.
-
-Зависимости фронтенда: React, `lucide-react`, Tailwind (core utility
-classes), шрифты Fraunces / Inter / IBM Plex Mono (Google Fonts).
+Зависимости: React, `lucide-react`, Tailwind, шрифты Fraunces / Inter / IBM Plex Mono.
 
 ---
 
-## 8. Развёртывание: Yandex Cloud (серверлес)
+## 8. Инфраструктура Yandex Cloud (только хранилище)
 
-Компоненты:
+Облако используется **только как хранилище** — рантайм и вычисления локальные.
 
 | Компонент | Назначение |
 |---|---|
-| **Cloud Functions** | по одной функции на каждый шаг пайплайна (`step-*`) + функция `api` для роутера API Gateway |
-| **API Gateway** | публичный HTTP-вход для фронтенда, маршрутизация на функции, CORS |
-| **Object Storage** | бинарные артефакты: изображения, видео, xlsx, json-снапшоты версий; также хостинг статики фронтенда |
-| **Yandex Database (YDB)** | манифест по каждому артикулу — `currentVersion`/`history`/`overrides`, атомарные обновления при конкурентных регенерациях |
-| **Message Queue (YMQ)** | асинхронная цепочка шагов и точечные регенерации; триггеры на `step-*` функции |
-| **Lockbox** | секреты — ключи OpenAI Images API и kling.ai, доступ функциям через переменные окружения с секретами |
-| **Cloud CDN** | перед бакетом со статикой фронтенда (опционально) |
+| **Object Storage** | артефакты: изображения, видео, xlsx, json-версии мастер-данных и текстов |
+| **Yandex Database (YDB Serverless)** | манифесты — Document API (DynamoDB-compatible), атомарные обновления |
 
-Локальная разработка: каждая `functions/step-*` и `functions/api` —
-самостоятельный модуль с собственным `package.json`, тестируется локально
-обычным вызовом `handler(event)` с мок-`event`; для эмуляции YDB/Object
-Storage на этапе разработки можно временно подставлять локальный
-файл/память через тот же интерфейс `versionStore` (один интерфейс — два
-адаптера: `local` и `yandex-cloud`).
+Настройка: статический ключ сервисного аккаунта (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`),
+совместимый с AWS SDK v3. Endpoint YDB Document API — из консоли YDB.
 
-Развёртывание — через `yc CLI` (`yc serverless function version create`,
-`yc serverless api-gateway create` из `infra/api-gateway.yaml`) или
-Terraform-провайдер `yandex-cloud/yandex`.
+Секреты хранятся в `.env.local` (не коммитится).
 
 ---
 
 ## 9. Текущий статус / следующие шаги
 
-- [x] Архитектура пайплайна и оркестратора
-- [x] Схема версионирования результатов (адаптирована под YDB + Object Storage)
-- [x] Прототип фронтенда (`PipelineApp.jsx`)
-- [ ] `template.master.json` — перенести формулы линейки «Василиса»
-- [ ] `versionStore.js` — интерфейс + адаптеры `local` / `yandex-cloud` (YDB + Object Storage)
-- [ ] Функция `api` + `infra/api-gateway.yaml`
-- [ ] Функции `step-*` (нормализация, тексты, изображения, видео, excel, сборка)
-- [ ] Адаптеры `openaiImages.js` / `klingVideo.js` (ключи через Lockbox)
-- [ ] `excelWriter.js` + column-map для Ozon/WB
-- [ ] Настройка YMQ-триггеров между шагами
-- [ ] Хостинг фронтенда в Object Storage + CDN
-- [ ] Подключить `PipelineApp.jsx` к API Gateway вместо моков
+- [x] Архитектура пайплайна и схема версионирования
+- [x] `layers/shared/config/template.master.json`
+- [x] `layers/shared/templateEngine.js`
+- [x] `layers/shared/versionStore.js` (local + yandex-cloud адаптеры)
+- [x] `layers/shared/excelWriter.js` + column-map'ы Ozon/WB
+- [x] `functions/api/index.js`
+- [x] Все функции `step-*`
+- [x] `frontend/PipelineApp.jsx` подключён к API
+- [x] Локальный dev-сервер (`infra/local-server.js`) + Vite
+- [ ] `versionStore.js` — добавить адаптер `cloud-with-fallback`
+- [ ] E2E прогон: опросник → все 6 шагов → артефакты в облаке
+- [ ] Зафиксировать весь код в git

@@ -1,0 +1,205 @@
+openapi: 3.0.0
+info:
+  title: mp-card-creator API
+  version: 1.0.0
+
+# Replace ${API_FUNCTION_ID} with the actual Cloud Function ID before deploying.
+# Set via: yc serverless api-gateway create --spec infra/api-gateway.yaml
+
+x-yc-apigateway:
+  cors:
+    origin: '*'
+    methods: '*'
+    allowedHeaders: 'Content-Type,Authorization'
+
+paths:
+  /lines:
+    get:
+      operationId: listLines
+      summary: List all mold lines
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: ${API_FUNCTION_ID}
+        tag: $latest
+      responses:
+        '200':
+          description: OK
+
+    post:
+      operationId: createLine
+      summary: Create a new line from questionnaire (runs step-normalize)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Questionnaire'
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: ${API_FUNCTION_ID}
+        tag: $latest
+      responses:
+        '200':
+          description: Master data computed and saved
+
+  /lines/{id}/manifest:
+    get:
+      operationId: getManifest
+      summary: Get full manifest for a line
+      parameters:
+        - $ref: '#/components/parameters/lineId'
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: ${API_FUNCTION_ID}
+        tag: $latest
+      responses:
+        '200':
+          description: Manifest JSON
+        '404':
+          description: Article not found
+
+  /lines/{id}/steps/{step}:
+    get:
+      operationId: getStepData
+      summary: Get step data and artifact list for a given version
+      parameters:
+        - $ref: '#/components/parameters/lineId'
+        - $ref: '#/components/parameters/stepId'
+        - name: version
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: ${API_FUNCTION_ID}
+        tag: $latest
+      responses:
+        '200':
+          description: Step meta + artifact list
+        '404':
+          description: Article or step not found
+
+  /lines/{id}/steps/{step}/regenerate:
+    post:
+      operationId: regenerateStep
+      summary: Enqueue full step regeneration
+      parameters:
+        - $ref: '#/components/parameters/lineId'
+        - $ref: '#/components/parameters/stepId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                force:
+                  type: boolean
+                  default: true
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: ${API_FUNCTION_ID}
+        tag: $latest
+      responses:
+        '202':
+          description: Queued
+
+  /lines/{id}/steps/{step}/items/{item}/regenerate:
+    post:
+      operationId: regenerateItem
+      summary: Enqueue single artifact regeneration
+      parameters:
+        - $ref: '#/components/parameters/lineId'
+        - $ref: '#/components/parameters/stepId'
+        - name: item
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                force:
+                  type: boolean
+                  default: true
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: ${API_FUNCTION_ID}
+        tag: $latest
+      responses:
+        '202':
+          description: Queued
+
+components:
+  parameters:
+    lineId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Article/line identifier, e.g. "0553"
+    stepId:
+      name: step
+      in: path
+      required: true
+      schema:
+        type: string
+        enum:
+          - 01-normalize
+          - 02-texts
+          - 03-images
+          - 04-video
+          - 05-excel
+          - 06-assemble
+
+  schemas:
+    Questionnaire:
+      type: object
+      required:
+        - moldName
+        - article
+        - brand
+        - theme
+        - color
+        - priceBaseM
+        - sizes
+        - artifacts
+      properties:
+        moldName:    { type: string }
+        article:     { type: string }
+        brand:       { type: string }
+        theme:       { type: string }
+        color:       { type: string }
+        priceBaseM:  { type: number }
+        force:       { type: boolean, default: false }
+        sizes:
+          type: array
+          minItems: 5
+          maxItems: 5
+          items:
+            type: object
+            required: [size, faceSize, moldLength, moldWidth, moldHeight, moldWeight]
+            properties:
+              size:       { type: string, enum: [XS, S, M, L, XL] }
+              faceSize:   { type: number }
+              moldLength: { type: number }
+              moldWidth:  { type: number }
+              moldHeight: { type: number }
+              moldWeight: { type: number }
+        renders:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items: { type: string }
+        artifacts:
+          type: array
+          items:
+            type: string
+            enum: [images, video, excel-ozon, excel-wb]

@@ -1,0 +1,33 @@
+{
+  "sizes": ["XS", "S", "M", "L", "XL"],
+  "baseSizeKey": "M",
+
+  "computedFields": {
+    "weightPacked":  "moldWeight + 40",
+    "priceBase":     "round(priceBaseM * (faceSize / faceSizeM), 10)",
+    "priceDiscount": "priceBase * 0.75",
+    "toyFrom":       "faceSize * 4",
+    "toyTo":         "faceSize * 8"
+  },
+
+  "textTemplates": {
+    "titleShort": "Молд «{{moldName}}» {{faceSize}}см #{{brand}}",
+    "titleFull":  "Молд силиконовый для ватной игрушки «{{moldName}}», форма для личика куклы, {{moldLength}}x{{moldWidth}}x{{moldHeight}} см, {{brand}}",
+    "annotation": "Авторский силиконовый молд для отливки личика ватной игрушки или куклы. Глаза без зрачков — расписывайте сами и создавайте разные образы. Личико {{faceSize}} см."
+  },
+
+  "static": {
+    "type":           "Молд силиконовый",
+    "purpose":        "Для кукол, ватных игрушек, рукоделия",
+    "topic":          "Личико малыша, лицо ребёнка",
+    "material":       "Силикон",
+    "heatResistance": "от -20 до +200",
+    "reusable":       "Да",
+    "foodSafe":       "Нет",
+    "country":        "Россия",
+    "ageLimit":       "14+",
+    "packaging":      "Крафтовая коробка",
+    "set":            "1 молд + 1 пробная отливка",
+    "categoryOzon":   "Хобби и творчество → Лепка → Молды и формы"
+  }
+}

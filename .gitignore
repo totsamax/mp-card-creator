@@ -1,0 +1,16 @@
+node_modules
+frontend/node_modules
+frontend/dist
+
+# Локальные данные
+output/
+
+# Секреты — не коммитить
+infra/env.sh
+.env.local
+
+# Временные zip-архивы деплоя
+deploy/
+
+# macOS
+.DS_Store

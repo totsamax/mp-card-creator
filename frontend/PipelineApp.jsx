@@ -1,8 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Layers, Type, Image as ImageIcon, Film, FileSpreadsheet, Folder,
   ChevronDown, RotateCcw, Plus, Upload, Check, Play, Download, X,
 } from 'lucide-react';
+
+// Base URL for API Gateway. Set VITE_API_BASE_URL in .env to point at the deployed gateway.
+// Empty string → same origin (works when frontend is served by the api function locally).
+const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) ?? '';
+
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+  });
+  if (!res.ok) throw new Error(`${opts.method ?? 'GET'} ${path} → ${res.status}`);
+  return res.json();
+}
 
 const STYLES = `
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
@@ -415,13 +428,14 @@ function AssembleView({ line }) {
   );
 }
 
-function StepperNav({ active, onSelect, lineId }) {
+function StepperNav({ active, onSelect, lineId, manifests }) {
   return (
     <div className="flex items-center gap-1 overflow-x-auto pb-1">
       {STEPS.map((step, i) => {
         const Icon = step.icon;
         const isActive = step.key === active;
-        const hasData = (VERSIONS[lineId]?.[step.key] || []).length > 0;
+        const lineVersions = (manifests && manifests[lineId]) ? manifestToVersions(manifests[lineId]) : VERSIONS[lineId] || {};
+        const hasData = (lineVersions[step.key] || []).length > 0;
         return (
           <div key={step.key} className="flex items-center">
             <button
@@ -448,25 +462,62 @@ function StepperNav({ active, onSelect, lineId }) {
   );
 }
 
-function QuestionnaireForm({ onSubmit }) {
+const SIZE_DEFAULTS = {
+  XS: { faceSize: 2,   moldLength: 3,   moldWidth: 1.25, moldHeight: 2.5,  moldWeight: 7   },
+  S:  { faceSize: 3,   moldLength: 4.5, moldWidth: 1.9,  moldHeight: 3.75, moldWeight: 25  },
+  M:  { faceSize: 4,   moldLength: 6,   moldWidth: 2.5,  moldHeight: 5,    moldWeight: 60  },
+  L:  { faceSize: 5,   moldLength: 7.5, moldWidth: 3.1,  moldHeight: 6.25, moldWeight: 117 },
+  XL: { faceSize: 6,   moldLength: 9,   moldWidth: 3.75, moldHeight: 7.5,  moldWeight: 202 },
+};
+
+const SIZE_FIELDS = [
+  { key: 'faceSize',   label: 'Личико, см' },
+  { key: 'moldLength', label: 'Длина, см' },
+  { key: 'moldWidth',  label: 'Ширина, см' },
+  { key: 'moldHeight', label: 'Высота, см' },
+  { key: 'moldWeight', label: 'Вес, г' },
+];
+
+function QuestionnaireForm({ onSubmit, loading }) {
   const [form, setForm] = useState({
-    name: '', article: '', brand: 'ТопМолд', faceSize: 4, theme: '', color: '', priceBase: 1000,
+    moldName: '', article: '', brand: 'ТопМолд', theme: '', color: '', priceBaseM: 1000,
+    sizes: ALL_SIZES.map(size => ({ size, ...SIZE_DEFAULTS[size] })),
     artifacts: { images: true, video: true, ozon: true, wb: true },
   });
   const [files, setFiles] = useState([]);
 
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
   const toggleArtifact = (key) => setForm((f) => ({ ...f, artifacts: { ...f.artifacts, [key]: !f.artifacts[key] } }));
+  const setSize = (size, field, value) => setForm((f) => ({
+    ...f,
+    sizes: f.sizes.map(r => r.size === size ? { ...r, [field]: parseFloat(value) || 0 } : r),
+  }));
+
+  const buildQuestionnaire = () => ({
+    moldName:   form.moldName,
+    article:    form.article,
+    brand:      form.brand,
+    theme:      form.theme,
+    color:      form.color,
+    priceBaseM: Number(form.priceBaseM),
+    sizes:      form.sizes,
+    artifacts:  [
+      form.artifacts.images && 'images',
+      form.artifacts.video  && 'video',
+      form.artifacts.ozon   && 'excel-ozon',
+      form.artifacts.wb     && 'excel-wb',
+    ].filter(Boolean),
+  });
 
   return (
-    <div className="pp-card rounded-lg p-5 max-w-2xl">
+    <div className="pp-card rounded-lg p-5 max-w-3xl">
       <h2 className="pp-display text-lg mb-1" style={{ fontWeight: 500 }}>Новая линейка молда</h2>
-      <p className="text-sm pp-muted mb-4">Минимум полей — остальное пайплайн посчитает по шаблону для всех 5 размеров.</p>
+      <p className="text-sm pp-muted mb-4">Заполните поля — пайплайн посчитает цены и тексты, физические параметры задайте вручную.</p>
 
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div>
           <label className="pp-label">Имя молда</label>
-          <input className="pp-input" placeholder="напр. Василиса" value={form.name} onChange={(e) => set('name', e.target.value)} />
+          <input className="pp-input" placeholder="напр. Василиса" value={form.moldName} onChange={(e) => set('moldName', e.target.value)} />
         </div>
         <div>
           <label className="pp-label">Артикульная серия</label>
@@ -487,18 +538,49 @@ function QuestionnaireForm({ onSubmit }) {
 
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div>
-          <label className="pp-label">Базовый размер личика (M), см</label>
-          <input type="number" className="pp-input" value={form.faceSize} onChange={(e) => set('faceSize', e.target.value)} />
+          <label className="pp-label">Базовая цена за размер M, ₽</label>
+          <input type="number" className="pp-input" value={form.priceBaseM} onChange={(e) => set('priceBaseM', e.target.value)} />
         </div>
         <div>
-          <label className="pp-label">Базовая цена за M, ₽</label>
-          <input type="number" className="pp-input" value={form.priceBase} onChange={(e) => set('priceBase', e.target.value)} />
+          <label className="pp-label">Тема / персонаж</label>
+          <input className="pp-input" placeholder="напр. ангелочек, кудрявая прядь" value={form.theme} onChange={(e) => set('theme', e.target.value)} />
         </div>
       </div>
 
-      <div className="mb-3">
-        <label className="pp-label">Тема / персонаж</label>
-        <textarea className="pp-textarea" rows={2} placeholder="напр. ангелочек с лёгкой улыбкой, кудрявая прядь волос" value={form.theme} onChange={(e) => set('theme', e.target.value)} />
+      {/* Sizes table */}
+      <div className="mb-4">
+        <label className="pp-label mb-2">Физические параметры по размерам</label>
+        <div className="pp-card rounded-lg overflow-hidden">
+          <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--line)' }}>
+                <th className="p-2 text-left pp-muted font-medium" style={{ width: 40 }}>Размер</th>
+                {SIZE_FIELDS.map(f => (
+                  <th key={f.key} className="p-2 text-right pp-muted font-medium text-xs">{f.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {form.sizes.map((row) => (
+                <tr key={row.size} style={{ borderTop: '1px solid var(--line)', background: row.size === 'M' ? 'var(--lavender-soft)' : 'transparent' }}>
+                  <td className="p-2 pp-mono text-xs font-medium">{row.size}</td>
+                  {SIZE_FIELDS.map(f => (
+                    <td key={f.key} className="p-1">
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="pp-input pp-mono text-right"
+                        style={{ padding: '4px 6px', fontSize: 12 }}
+                        value={row[f.key]}
+                        onChange={(e) => setSize(row.size, f.key, e.target.value)}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="mb-4">
@@ -531,22 +613,76 @@ function QuestionnaireForm({ onSubmit }) {
         </div>
       </div>
 
-      <button className="pp-btn pp-btn-primary" onClick={() => onSubmit(form)}>
-        <Plus size={14} aria-hidden="true" /> Сохранить и запустить пайплайн
+      <button className="pp-btn pp-btn-primary" disabled={loading} onClick={() => onSubmit(buildQuestionnaire())}>
+        <Plus size={14} aria-hidden="true" /> {loading ? 'Запускаем…' : 'Сохранить и запустить пайплайн'}
       </button>
     </div>
   );
 }
 
+// Maps step key (used in frontend) to step id (used in API)
+const STEP_KEY_TO_ID = {
+  normalize: '01-normalize',
+  texts:     '02-texts',
+  images:    '03-images',
+  video:     '04-video',
+  excel:     '05-excel',
+  assemble:  '06-assemble',
+};
+
+// Transform manifest.steps into the VERSIONS shape expected by VersionPicker
+function manifestToVersions(manifest) {
+  if (!manifest?.steps) return {};
+  const result = {};
+  for (const [stepId, meta] of Object.entries(manifest.steps)) {
+    const key = Object.entries(STEP_KEY_TO_ID).find(([, id]) => id === stepId)?.[0];
+    if (!key) continue;
+    result[key] = (meta.history || []).map((h, i) => ({
+      v:    h.version,
+      note: h.note || (h.needsReview ? '⚠ требует проверки' : `версия ${h.version}`),
+      date: h.createdAt ? new Date(h.createdAt).toLocaleDateString('ru', { day: '2-digit', month: 'short' }) : `v${i + 1}`,
+    }));
+  }
+  return result;
+}
+
 export default function PipelineApp() {
+  const [lines, setLines]           = useState(LINES);
   const [activeLineId, setActiveLineId] = useState(LINES[0].id);
-  const [activeTab, setActiveTab] = useState('results');
+  const [activeTab, setActiveTab]   = useState('results');
   const [activeStep, setActiveStep] = useState('normalize');
   const [versionState, setVersionState] = useState({});
-  const [toast, setToast] = useState(null);
+  const [manifests, setManifests]   = useState({});
+  const [formLoading, setFormLoading] = useState(false);
+  const [toast, setToast]           = useState(null);
 
-  const line = LINES.find((l) => l.id === activeLineId);
-  const stepVersions = VERSIONS[activeLineId]?.[activeStep] || [];
+  // Fetch lines list on mount
+  useEffect(() => {
+    apiFetch('/lines')
+      .then(data => {
+        if (data.lines?.length) {
+          const apiLines = data.lines.map(l => ({ ...l, id: l.article, name: l.moldName || l.article, theme: '', color: '', status: 'active', sizes: l.sizes || ALL_SIZES }));
+          setLines(apiLines);
+          setActiveLineId(apiLines[0].id);
+        }
+        // else: keep mock LINES and mock activeLineId
+      })
+      .catch(() => { /* keep mock LINES */ });
+  }, []);
+
+  // Fetch manifest whenever active line changes
+  const refreshManifest = useCallback((lineId) => {
+    apiFetch(`/lines/${lineId}/manifest`)
+      .then(manifest => setManifests(m => ({ ...m, [lineId]: manifest })))
+      .catch(() => { /* keep VERSIONS mock */ });
+  }, []);
+
+  useEffect(() => { if (activeLineId) refreshManifest(activeLineId); }, [activeLineId, refreshManifest]);
+
+  const line         = lines.find((l) => l.id === activeLineId) || lines[0];
+  const liveVersions = manifests[activeLineId] ? manifestToVersions(manifests[activeLineId]) : null;
+  const versions     = liveVersions || VERSIONS[activeLineId] || {};
+  const stepVersions = versions[activeStep] || [];
   const currentVersion = versionState[`${activeLineId}.${activeStep}`] ?? stepVersions[stepVersions.length - 1]?.v;
 
   const showToast = (msg) => {
@@ -554,9 +690,54 @@ export default function PipelineApp() {
     setTimeout(() => setToast(null), 2500);
   };
 
-  const handleRegenerateStep = () => showToast(`Шаг «${STEPS.find((s) => s.key === activeStep).label}» перезапущен — готовится новая версия`);
-  const handleRegenerateItem = (lineId, size, type) => showToast(`Перегенерация: ${size}${type ? ` · ${type}` : ''} — задача отправлена`);
-  const handleFormSubmit = () => showToast('Опросник сохранён, пайплайн запущен');
+  const handleRegenerateStep = async () => {
+    const stepId = STEP_KEY_TO_ID[activeStep];
+    showToast(`Шаг «${STEPS.find((s) => s.key === activeStep).label}» перезапускается…`);
+    try {
+      await apiFetch(`/lines/${activeLineId}/steps/${stepId}/regenerate`, { method: 'POST', body: JSON.stringify({ force: true }) });
+      showToast('Перегенерация запущена — обновится автоматически');
+      setTimeout(() => refreshManifest(activeLineId), 3000);
+    } catch (err) {
+      showToast(`Ошибка: ${err.message}`);
+    }
+  };
+
+  const handleRegenerateItem = async (lineId, size, type) => {
+    const stepId = STEP_KEY_TO_ID[activeStep];
+    const item   = type ? `${size}_${type}` : size;
+    showToast(`Перегенерация: ${size}${type ? ` · ${type}` : ''} — задача отправлена`);
+    try {
+      await apiFetch(`/lines/${lineId}/steps/${stepId}/items/${item}/regenerate`, { method: 'POST', body: JSON.stringify({ force: true }) });
+    } catch (err) {
+      showToast(`Ошибка: ${err.message}`);
+    }
+  };
+
+  const handleFormSubmit = async (questionnaire) => {
+    setFormLoading(true);
+    try {
+      const res = await apiFetch('/lines', { method: 'POST', body: JSON.stringify(questionnaire) });
+      showToast('Опросник сохранён, пайплайн запущен');
+      // Add new line to sidebar if not already there
+      if (!lines.find(l => l.id === questionnaire.article)) {
+        setLines(prev => [...prev, {
+          id: questionnaire.article,
+          name: questionnaire.moldName,
+          theme: questionnaire.theme,
+          color: questionnaire.color,
+          status: 'active',
+          sizes: questionnaire.sizes.map(s => s.size),
+        }]);
+      }
+      setActiveLineId(questionnaire.article);
+      setActiveTab('results');
+      refreshManifest(questionnaire.article);
+    } catch (err) {
+      showToast(`Ошибка запуска пайплайна: ${err.message}`);
+    } finally {
+      setFormLoading(false);
+    }
+  };
 
   const renderStep = () => {
     switch (activeStep) {
@@ -578,7 +759,7 @@ export default function PipelineApp() {
         <aside className="pp-line border-r p-4" style={{ width: 220, flexShrink: 0 }}>
           <div className="pp-display text-sm mb-4 pp-muted" style={{ letterSpacing: '0.04em', textTransform: 'uppercase' }}>Линейки молдов</div>
           <div className="flex flex-col gap-1">
-            {LINES.map((l) => (
+            {lines.map((l) => (
               <button
                 key={l.id}
                 onClick={() => { setActiveLineId(l.id); setActiveTab('results'); setActiveStep('normalize'); }}
@@ -637,10 +818,10 @@ export default function PipelineApp() {
           </div>
 
           {activeTab === 'form' ? (
-            <QuestionnaireForm onSubmit={handleFormSubmit} />
+            <QuestionnaireForm onSubmit={handleFormSubmit} loading={formLoading} />
           ) : (
             <>
-              <StepperNav active={activeStep} onSelect={setActiveStep} lineId={activeLineId} />
+              <StepperNav active={activeStep} onSelect={setActiveStep} lineId={activeLineId} manifests={manifests} />
               <div className="my-3">
                 <VersionPicker
                   versions={stepVersions}

@@ -1,0 +1,17 @@
+{
+  "videoTypes": ["turntable", "detail", "lifestyle"],
+  "prompts": {
+    "turntable": "Silicone mold «{{moldName}}» slowly rotating 360°, studio white background, sharp focus on face relief texture, smooth professional product video",
+    "detail":    "Close-up of silicone mold «{{moldName}}» surface, camera slowly zooms into the detailed face relief, {{color}} silicone material clearly visible",
+    "lifestyle": "Hands working with silicone mold «{{moldName}}», pouring cotton wool material, cozy crafting studio, warm light"
+  },
+  "klingApi": {
+    "imageToVideo": {
+      "model":    "kling-v1",
+      "duration": 5,
+      "cfg_scale": 0.5
+    },
+    "pollIntervalMs": 5000,
+    "pollTimeoutMs":  300000
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "imageTypes": ["main", "infographic", "scale", "lifestyle"],
+  "prompts": {
+    "main": "Product photo of a silicone mold for cotton toy doll face. Mold name: {{moldName}}, face size {{faceSize}} cm, color: {{color}}. White background, studio lighting, sharp focus on the relief texture. Top-down and 3/4 view.",
+    "infographic": "Infographic for marketplace listing. Silicone mold «{{moldName}}», {{color}} color. Show dimensions: {{moldLength}}x{{moldWidth}}x{{moldHeight}} cm clearly labeled. Include face size {{faceSize}} cm callout. Clean white background, professional product design.",
+    "scale": "Silicone mold «{{moldName}}» ({{faceSize}} cm face size, {{color}}) placed next to a finished cotton wool doll showing the scale. The doll should be approximately {{toyFrom}}–{{toyTo}} cm tall. Warm crafting studio background.",
+    "lifestyle": "Lifestyle flat lay: silicone mold «{{moldName}}» in {{color}} surrounded by crafting supplies — cotton wool, acrylic paints, brushes. Warm natural light, wooden table, cozy creative atmosphere."
+  },
+  "feedbackSuffix": " Previous attempt was rejected. Issues to fix: {{issues}}"
+}
