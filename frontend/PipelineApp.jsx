@@ -17,6 +17,19 @@ async function apiFetch(path, opts = {}) {
   return res.json();
 }
 
+// Multipart submission — do NOT use apiFetch (it sets Content-Type: application/json which breaks the boundary)
+async function submitQuestionnaire(questionnaire, photoFiles) {
+  const fd = new FormData();
+  fd.append('questionnaire', JSON.stringify(questionnaire));
+  for (const file of photoFiles) {
+    fd.append('photos', file, file.name);
+  }
+  // No Content-Type header — browser sets it automatically with the correct boundary
+  const res = await fetch(`${API_BASE}/lines`, { method: 'POST', body: fd });
+  if (!res.ok) throw new Error(`POST /lines → ${res.status}`);
+  return res.json();
+}
+
 const STYLES = `
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
@@ -758,7 +771,8 @@ function QuestionnaireForm({ onSubmit, loading }) {
       </div>
 
       {!form.article && <p className="text-xs mb-2" style={{ color: 'var(--clay-dark)' }}>Заполните поле «Артикульная серия» перед отправкой</p>}
-      <button className="pp-btn pp-btn-primary" disabled={loading || !form.article || !form.moldName} onClick={() => onSubmit(buildQuestionnaire())}>
+      {photoFiles.length === 0 && <p className="text-xs mb-2" style={{ color: 'var(--clay-dark)' }}>Прикрепите хотя бы одно фото молда</p>}
+      <button className="pp-btn pp-btn-primary" disabled={loading || !form.article || !form.moldName || photoFiles.length === 0} onClick={() => onSubmit(buildQuestionnaire(), photoFiles)}>
         <Plus size={14} aria-hidden="true" /> {loading ? 'Запускаем…' : 'Сохранить и запустить пайплайн'}
       </button>
     </div>
@@ -854,10 +868,10 @@ export default function PipelineApp() {
     }
   };
 
-  const handleFormSubmit = async (questionnaire) => {
+  const handleFormSubmit = async (questionnaire, photoFiles) => {
     setFormLoading(true);
     try {
-      const res = await apiFetch('/lines', { method: 'POST', body: JSON.stringify(questionnaire) });
+      const res = await submitQuestionnaire(questionnaire, photoFiles);
       showToast('Опросник сохранён, пайплайн запущен');
       // Add new line to sidebar if not already there
       if (!lines.find(l => l.id === questionnaire.article)) {
