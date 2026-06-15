@@ -24,7 +24,12 @@ The pipeline skeleton is built but has never run end-to-end. Five phases close t
   2. Форма опросника позволяет загрузить минимум одно фото молда — фото передаётся в API при создании карточки
   3. template.master.json принимает `moldType` как параметр, а не как отдельный шаблон — все 5 размеров вычисляются независимо от типа молда
   4. POST /lines с полями `moldType` и `photos` создаёт карточку без ошибки
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+- [ ] 01-01-PLAN.md — Wave 0: тест-раннер node:test, установка busboy (legitimacy gate), падающие E2E-тесты (контракт фазы)
+- [ ] 01-02-PLAN.md — Схема + данные: moldType/photos/moldSize в schema, секция moldTypes, templateEngine fallback
+- [ ] 01-03-PLAN.md — Multipart POST /lines: busboy в адаптере, сохранение фото через versionStore, sanitize filename
+- [ ] 01-04-PLAN.md — Форма опросника: select типа молда, загрузка фото, FormData-отправка (vertical slice end-to-end)
 
 ### Phase 2: Working Texts Step
 **Goal**: Тексты для всех 5 размеров генерируются с учётом типа молда, а critic loop реально повторяет попытки локально
@@ -79,7 +84,7 @@ The pipeline skeleton is built but has never run end-to-end. Five phases close t
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Universal Mold Schema | 0/TBD | Not started | - |
+| 1. Universal Mold Schema | 0/4 | Planned | - |
 | 2. Working Texts Step | 0/TBD | Not started | - |
 | 3. Working Images Step | 0/TBD | Not started | - |
 | 4. Connected Frontend | 0/TBD | Not started | - |
