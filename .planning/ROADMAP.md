@@ -6,7 +6,7 @@ The pipeline skeleton is built but has never run end-to-end. Five phases close t
 
 ## Phases
 
-- [ ] **Phase 1: Universal Mold Schema** - Опросник принимает любой тип молда и фото как обязательные поля
+- [x] **Phase 1: Universal Mold Schema** - Опросник принимает любой тип молда и фото как обязательные поля (completed 2026-06-15)
 - [ ] **Phase 2: Working Texts Step** - Тексты генерируются для реального типа молда, critic loop работает локально
 - [ ] **Phase 3: Working Images Step** - Шаг 03-images запускается, слайды генерируются, сохраняются и видны в UI
 - [ ] **Phase 4: Connected Frontend** - UI показывает реальные данные из API, статусы шагов, ошибки
@@ -42,7 +42,7 @@ The pipeline skeleton is built but has never run end-to-end. Five phases close t
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 01-04-PLAN.md — Форма опросника: select типа молда, загрузка фото, FormData-отправка (vertical slice end-to-end)
+- [x] 01-04-PLAN.md — Форма опросника: select типа молда, загрузка фото, FormData-отправка (vertical slice end-to-end)
 
 ### Phase 2: Working Texts Step
 
@@ -109,7 +109,7 @@ The pipeline skeleton is built but has never run end-to-end. Five phases close t
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Universal Mold Schema | 3/4 | In Progress|  |
+| 1. Universal Mold Schema | 4/4 | Complete   | 2026-06-15 |
 | 2. Working Texts Step | 0/TBD | Not started | - |
 | 3. Working Images Step | 0/TBD | Not started | - |
 | 4. Connected Frontend | 0/TBD | Not started | - |

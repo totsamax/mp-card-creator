@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: "Completed 01-03-PLAN.md — multipart POST /lines wired, busboy in local-server.js, photos saved via versionStore, all 3 tests A/B/C GREEN"
-last_updated: "2026-06-15T20:44:00Z"
+status: verifying
+stopped_at: Completed 01-03-PLAN.md — multipart POST /lines wired, busboy in local-server.js, photos saved via versionStore, all 3 tests A/B/C GREEN
+last_updated: "2026-06-15T20:55:10.544Z"
 last_activity: 2026-06-15 -- Phase 01 Plan 03 completed
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 3
-  percent: 0
+  completed_plans: 4
+  percent: 20
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-06-15)
 
 Phase: 01 (universal-mold-schema) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-15 -- Phase 01 Plan 03 completed
 
 Progress: [░░░░░░░░░░] 0%
@@ -55,6 +55,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01-universal-mold-schema P01 | 15 | 3 tasks | 5 files |
 | Phase 01-universal-mold-schema P02 | 7 | 3 tasks | 4 files |
 | Phase 01-universal-mold-schema P03 | 12 | 2 tasks | 2 files |
+| Phase 01-universal-mold-schema P04 | 35 | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,9 @@ Recent decisions affecting current work:
 - multipart parsing in HTTP adapter (local-server.js), not in handler — keeps handler serverless-compatible
 - photos saved via versionStore.putArtifact('photos',1,...) — not direct S3, fallback is free
 - questionnaire.photos assigned before inputHash so photo changes invalidate cache
+- [Phase ?]: FormData без ручного Content-Type — браузер сам выставляет boundary; apiFetch не используется для multipart
+- [Phase ?]: photoFiles хранят File-объекты (не имена) — реальные данные для fd.append() в FormData
+- [Phase ?]: activeTab=form рендерит QuestionnaireForm независимо от lines.length — форма доступна сразу при открытии UI
 
 ### Pending Todos
 
@@ -93,6 +97,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-15T20:44:00Z
+Last session: 2026-06-15T20:54:56.319Z
 Stopped at: Completed 01-03-PLAN.md — multipart POST /lines wired, busboy in local-server.js, photos saved via versionStore, all 3 tests A/B/C GREEN
 Resume file: None
