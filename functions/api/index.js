@@ -120,6 +120,12 @@ exports.handler = async (event) => {
       return await handleGetStep(article, stepMatch[1], query);
     }
 
+    // GET /lines/:id/steps/:step/artifacts/:name[?version=N]
+    const artifactMatch = rest.match(/^\/steps\/([^/]+)\/artifacts\/([^/]+)$/);
+    if (method === 'GET' && artifactMatch) {
+      return await handleGetArtifact(article, artifactMatch[1], artifactMatch[2], query);
+    }
+
     // POST /lines/:id/steps/:step/regenerate
     const regenMatch = rest.match(/^\/steps\/([^/]+)\/regenerate$/);
     if (method === 'POST' && regenMatch) {
@@ -173,17 +179,53 @@ async function handleListLines() {
 }
 
 async function handleCreateLine(event) {
-  let body;
-  try {
-    const raw = event.isBase64Encoded
-      ? Buffer.from(event.body, 'base64').toString('utf8')
-      : event.body;
-    body = typeof raw === 'string' ? JSON.parse(raw) : raw;
-  } catch {
-    return respond(400, { error: 'Invalid JSON body' });
+  let questionnaire;
+  let force = false;
+
+  if (event.files && event.files.length > 0) {
+    // Multipart path: files uploaded via busboy (local-server.js or equivalent adapter)
+    try {
+      questionnaire = JSON.parse(event.formFields && event.formFields.questionnaire ? event.formFields.questionnaire : '{}');
+    } catch {
+      return respond(400, { error: 'Invalid questionnaire JSON in form field' });
+    }
+    force = event.formFields && event.formFields.force === 'true';
+
+    // Save each uploaded photo via versionStore (T-01-03-01 path traversal mitigation)
+    const { article } = questionnaire;
+    if (!article) return respond(400, { error: 'questionnaire.article is required' });
+
+    const photoRefs = [];
+    for (const f of event.files) {
+      // Reject non-image uploads (T-01-03-03)
+      if (!f.mimeType || !f.mimeType.startsWith('image/')) {
+        return respond(400, { error: 'Only image uploads allowed' });
+      }
+      // Sanitize filename to prevent path traversal (T-01-03-01)
+      const safeName = path.basename(f.filename || '').replace(/[^a-zA-Z0-9._-]/g, '_');
+      if (!safeName) {
+        return respond(400, { error: 'Invalid filename in upload' });
+      }
+      await store.putArtifact(article, 'photos', 1, safeName, f.buffer);
+      photoRefs.push('/lines/' + article + '/steps/photos/artifacts/' + safeName);
+    }
+
+    // Assign photos BEFORE inputHash computation (Pitfall 4: photos must be part of hash)
+    questionnaire.photos = photoRefs;
+  } else {
+    // JSON path — existing logic unchanged
+    let body;
+    try {
+      const raw = event.isBase64Encoded
+        ? Buffer.from(event.body, 'base64').toString('utf8')
+        : event.body;
+      body = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch {
+      return respond(400, { error: 'Invalid JSON body' });
+    }
+    ({ force = false, ...questionnaire } = body);
   }
 
-  const { force = false, ...questionnaire } = body;
   const { article } = questionnaire;
   if (!article) return respond(400, { error: 'questionnaire.article is required' });
 
@@ -197,7 +239,7 @@ async function handleCreateLine(event) {
   if (!force && stepMeta) {
     const last = stepMeta.history?.[stepMeta.history.length - 1];
     if (last?.inputHash === inputHash) {
-      return respond(200, { skipped: true, reason: 'same input hash', article, stepId: '01-normalize', version: stepMeta.currentVersion });
+      return respond(200, { skipped: true, reason: 'same input hash', article, stepId: '01-normalize', version: stepMeta.currentVersion, questionnaire: last.questionnaire });
     }
   }
 
@@ -209,7 +251,7 @@ async function handleCreateLine(event) {
   }
 
   const nextVersion  = (stepMeta?.currentVersion ?? 0) + 1;
-  const historyEntry = { version: nextVersion, createdAt: new Date().toISOString(), inputHash };
+  const historyEntry = { version: nextVersion, createdAt: new Date().toISOString(), inputHash, questionnaire };
 
   await store.putArtifact(
     article, '01-normalize', nextVersion,
@@ -221,7 +263,7 @@ async function handleCreateLine(event) {
     history: [...(stepMeta?.history ?? []), historyEntry],
   });
 
-  return respond(200, { article, stepId: '01-normalize', version: nextVersion, masterData });
+  return respond(200, { article, stepId: '01-normalize', version: nextVersion, masterData, questionnaire });
 }
 
 async function handleGetStep(article, stepId, query) {
@@ -245,6 +287,53 @@ async function handleGetStep(article, stepId, query) {
   }
 
   return respond(200, { article, stepId, version, meta: stepMeta, artifacts, data: inlinedData });
+}
+
+async function handleGetArtifact(article, stepId, name, query) {
+  const manifest = await store.getManifest(article);
+  if (!manifest) return respond(404, { error: `Article "${article}" not found` });
+
+  const stepMeta = manifest.steps?.[stepId];
+  if (!stepMeta) return respond(404, { error: `Step "${stepId}" has no data yet` });
+
+  // Explicit version query takes priority
+  let effectiveVersion = query.version ? parseInt(query.version, 10) : null;
+
+  if (!effectiveVersion) {
+    // Check overrides first (used for needsReview cases)
+    const overrideVersion = stepMeta.overrides?.[name];
+    if (overrideVersion) {
+      effectiveVersion = parseInt(overrideVersion.replace('v', ''), 10);
+    } else {
+      // Find version from history where this artifact was written.
+      // Artifact name format: {size}_texts.json or {size}_{imageType}.png
+      // History entries have { size, imageType?, version }
+      const history = stepMeta.history || [];
+      const match = [...history].reverse().find(h => {
+        const expected = h.imageType
+          ? `${h.size}_${h.imageType}.png`
+          : `${h.size}_texts.json`;
+        return expected === name;
+      });
+      effectiveVersion = match?.version ?? stepMeta.currentVersion;
+    }
+  }
+
+  let buffer;
+  try {
+    buffer = await store.getArtifact(article, stepId, effectiveVersion, name);
+  } catch {
+    return respond(404, { error: `Artifact "${name}" not found at v${effectiveVersion}` });
+  }
+
+  const ext = name.split('.').pop().toLowerCase();
+  const contentTypes = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', json: 'application/json' };
+  return {
+    statusCode: 200,
+    headers: { 'Content-Type': contentTypes[ext] || 'application/octet-stream', 'Cache-Control': 'max-age=60' },
+    body: buffer.toString('base64'),
+    isBase64Encoded: true,
+  };
 }
 
 async function handleRegenerate(article, stepId, event, item) {
@@ -293,6 +382,13 @@ async function handleRegenerate(article, stepId, event, item) {
   }
 
   // Sync steps: invoke handler directly
+  if (stepId === '01-normalize') {
+    const manifest = await store.getManifest(article);
+    const history  = manifest?.steps?.['01-normalize']?.history ?? [];
+    const last     = [...history].reverse().find(h => h.questionnaire);
+    if (!last?.questionnaire) return respond(400, { error: 'No stored questionnaire for 01-normalize; submit the form to create the line first' });
+    return handleCreateLine({ body: JSON.stringify({ ...last.questionnaire, force }) });
+  }
   if (stepId === '05-excel') {
     const { handler } = requireStep('step-excel');
     return handler({ body: JSON.stringify({ article, force }) });
