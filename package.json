@@ -6,7 +6,7 @@
   "scripts": {
     "api": "node infra/local-server.js",
     "dev": "concurrently \"npm run api\" \"npm run --prefix frontend dev\"",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test test/"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
