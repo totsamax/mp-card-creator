@@ -4,16 +4,43 @@
 
   "computedFields": {
     "weightPacked":  "moldWeight + 40",
-    "priceBase":     "round(priceBaseM * (faceSize / faceSizeM), 10)",
+    "priceBase":     "round(priceBaseM * (moldSize / moldSizeM), 10)",
     "priceDiscount": "priceBase * 0.75",
-    "toyFrom":       "faceSize * 4",
-    "toyTo":         "faceSize * 8"
+    "toyFrom":       "moldSize * 4",
+    "toyTo":         "moldSize * 8"
   },
 
   "textTemplates": {
-    "titleShort": "Молд «{{moldName}}» {{faceSize}}см #{{brand}}",
-    "titleFull":  "Молд силиконовый для ватной игрушки «{{moldName}}», форма для личика куклы, {{moldLength}}x{{moldWidth}}x{{moldHeight}} см, {{brand}}",
-    "annotation": "Авторский силиконовый молд для отливки личика ватной игрушки или куклы. Глаза без зрачков — расписывайте сами и создавайте разные образы. Личико {{faceSize}} см."
+    "titleShort": "Молд «{{moldName}}» {{moldSize}}см #{{brand}}",
+    "titleFull":  "Молд силиконовый «{{moldName}}», {{moldLength}}x{{moldWidth}}x{{moldHeight}} см, {{brand}}",
+    "annotation": "Авторский силиконовый молд для ватных игрушек и рукоделия."
+  },
+
+  "moldTypes": {
+    "face": {
+      "topic":     "Личико малыша, лицо ребёнка",
+      "purpose":   "Для кукол, ватных игрушек, рукоделия",
+      "titleFull": "Молд силиконовый для ватной игрушки «{{moldName}}», форма для личика куклы, {{moldLength}}x{{moldWidth}}x{{moldHeight}} см, {{brand}}",
+      "annotation": "Авторский силиконовый молд для отливки личика ватной игрушки или куклы."
+    },
+    "hands": {
+      "topic":     "Руки куклы, кисти рук",
+      "purpose":   "Для кукол, ватных игрушек, рукоделия",
+      "titleFull": "Молд силиконовый «{{moldName}}», форма для рук куклы, {{moldLength}}x{{moldWidth}}x{{moldHeight}} см, {{brand}}",
+      "annotation": "Авторский силиконовый молд для отливки рук ватной игрушки или куклы."
+    },
+    "shoes": {
+      "topic":     "Обувь для куклы, ботиночки",
+      "purpose":   "Для кукол, ватных игрушек, рукоделия",
+      "titleFull": "Молд силиконовый «{{moldName}}», форма для обуви куклы, {{moldLength}}x{{moldWidth}}x{{moldHeight}} см, {{brand}}",
+      "annotation": "Авторский силиконовый молд для отливки обуви ватной игрушки или куклы."
+    },
+    "other": {
+      "topic":     "Молд для рукоделия",
+      "purpose":   "Для кукол, ватных игрушек, рукоделия",
+      "titleFull": "Молд силиконовый «{{moldName}}», {{moldLength}}x{{moldWidth}}x{{moldHeight}} см, {{brand}}",
+      "annotation": "Авторский силиконовый молд для ватных игрушек и рукоделия."
+    }
   },
 
   "static": {
