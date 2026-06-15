@@ -945,7 +945,9 @@ export default function PipelineApp() {
             </div>
           )}
 
-          {!line ? (
+          {activeTab === 'form' && !line ? (
+            <QuestionnaireForm onSubmit={handleFormSubmit} loading={formLoading} />
+          ) : !line ? (
             <div className="flex flex-col items-center justify-center" style={{ minHeight: 300, gap: 12 }}>
               <p className="pp-display text-xl pp-muted" style={{ fontWeight: 400 }}>Нет линеек</p>
               <p className="text-sm pp-muted">Создайте первую линейку молда</p>
