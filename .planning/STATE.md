@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Completed 01-02-PLAN.md — moldType+photos+moldSize schema, moldTypes template section, typed templateEngine, tests A/B GREEN"
-last_updated: "2026-06-15T20:29:04Z"
-last_activity: 2026-06-15 -- Phase 01 Plan 02 completed
+stopped_at: "Completed 01-03-PLAN.md — multipart POST /lines wired, busboy in local-server.js, photos saved via versionStore, all 3 tests A/B/C GREEN"
+last_updated: "2026-06-15T20:44:00Z"
+last_activity: 2026-06-15 -- Phase 01 Plan 03 completed
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 4
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-06-15)
 ## Current Position
 
 Phase: 01 (universal-mold-schema) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
-Last activity: 2026-06-15 -- Phase 01 Plan 02 completed
+Last activity: 2026-06-15 -- Phase 01 Plan 03 completed
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -54,6 +54,7 @@ Progress: [░░░░░░░░░░] 0%
 *Updated after each plan completion*
 | Phase 01-universal-mold-schema P01 | 15 | 3 tasks | 5 files |
 | Phase 01-universal-mold-schema P02 | 7 | 3 tasks | 4 files |
+| Phase 01-universal-mold-schema P03 | 12 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,9 @@ Recent decisions affecting current work:
 - [Phase ?]: node --test requires glob pattern (not directory) for file discovery in Node.js v22
 - evalExpr NaN/ReferenceError does not overwrite physicalRow value — graceful fallback for partial questionnaire data
 - moldTypes section in template.master.json drives titleFull/annotation/topic/purpose per type (face/hands/shoes/other)
+- multipart parsing in HTTP adapter (local-server.js), not in handler — keeps handler serverless-compatible
+- photos saved via versionStore.putArtifact('photos',1,...) — not direct S3, fallback is free
+- questionnaire.photos assigned before inputHash so photo changes invalidate cache
 
 ### Pending Todos
 
@@ -89,6 +93,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-15T20:29:04Z
-Stopped at: Completed 01-02-PLAN.md — moldType+photos+moldSize schema, moldTypes template section, typed templateEngine, tests A/B GREEN
+Last session: 2026-06-15T20:44:00Z
+Stopped at: Completed 01-03-PLAN.md — multipart POST /lines wired, busboy in local-server.js, photos saved via versionStore, all 3 tests A/B/C GREEN
 Resume file: None

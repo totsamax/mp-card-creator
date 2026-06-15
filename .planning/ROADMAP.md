@@ -38,7 +38,7 @@ The pipeline skeleton is built but has never run end-to-end. Five phases close t
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 01-03-PLAN.md — Multipart POST /lines: busboy в адаптере, сохранение фото через versionStore, sanitize filename
+- [x] 01-03-PLAN.md — Multipart POST /lines: busboy в адаптере, сохранение фото через versionStore, sanitize filename
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -109,7 +109,7 @@ The pipeline skeleton is built but has never run end-to-end. Five phases close t
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Universal Mold Schema | 2/4 | In Progress|  |
+| 1. Universal Mold Schema | 3/4 | In Progress|  |
 | 2. Working Texts Step | 0/TBD | Not started | - |
 | 3. Working Images Step | 0/TBD | Not started | - |
 | 4. Connected Frontend | 0/TBD | Not started | - |
