@@ -30,7 +30,7 @@ The pipeline skeleton is built but has never run end-to-end. Five phases close t
 **Plans**: 4 plansPlans:
 **Wave 1**
 
-- [ ] 01-01-PLAN.md — Wave 0: тест-раннер node:test, установка busboy (legitimacy gate), падающие E2E-тесты (контракт фазы)
+- [x] 01-01-PLAN.md — Wave 0: тест-раннер node:test, установка busboy (legitimacy gate), падающие E2E-тесты (контракт фазы)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -109,7 +109,7 @@ The pipeline skeleton is built but has never run end-to-end. Five phases close t
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Universal Mold Schema | 0/4 | Planned | - |
+| 1. Universal Mold Schema | 1/4 | In Progress|  |
 | 2. Working Texts Step | 0/TBD | Not started | - |
 | 3. Working Images Step | 0/TBD | Not started | - |
 | 4. Connected Frontend | 0/TBD | Not started | - |
