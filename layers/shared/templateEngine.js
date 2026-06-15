@@ -47,15 +47,22 @@ function renderText(template, ctx) {
  * @returns {object[]}            - one record per size (XS–XL), ordered as template.sizes
  */
 function computeMasterData(questionnaire, template) {
-  const { moldName, article, brand, theme, color, priceBaseM, sizes: sizeRows } = questionnaire;
+  const { moldName, article, brand, theme, color, priceBaseM, moldType, sizes: sizeRows } = questionnaire;
   const { baseSizeKey, computedFields, textTemplates, static: staticFields } = template;
+
+  // select type-specific config (topic/purpose/titleFull/annotation) with fallback to static/textTemplates
+  const typeCfg = (template.moldTypes && moldType) ? template.moldTypes[moldType] : null;
+  const titleFullTmpl = typeCfg ? typeCfg.titleFull : textTemplates.titleFull;
+  const annotationTmpl = typeCfg ? typeCfg.annotation : textTemplates.annotation;
+  const topic = typeCfg ? typeCfg.topic : staticFields.topic;
+  const purpose = typeCfg ? typeCfg.purpose : staticFields.purpose;
 
   // index size rows by size key for O(1) lookup
   const sizeByKey = Object.fromEntries(sizeRows.map(r => [r.size, r]));
 
   const baseRow = sizeByKey[baseSizeKey];
   if (!baseRow) throw new Error(`Base size "${baseSizeKey}" not found in questionnaire.sizes`);
-  const faceSizeM = baseRow.faceSize;
+  const moldSizeM = baseRow.moldSize;
 
   return template.sizes.map(sizeKey => {
     const physicalRow = sizeByKey[sizeKey];
@@ -70,18 +77,41 @@ function computeMasterData(questionnaire, template) {
       theme,
       color,
       priceBaseM,
-      faceSizeM,
+      moldSizeM,
     };
 
     // evaluate computed fields in declaration order (weightPacked needs moldWeight, etc.)
+    // ReferenceError means a physical property is absent — keep existing ctx value (from physicalRow) or null.
+    // NaN result means a numeric dependency was undefined — same: keep existing or null.
     for (const [field, expr] of Object.entries(computedFields)) {
-      ctx[field] = evalExpr(expr, ctx);
+      try {
+        const val = evalExpr(expr, ctx);
+        if (typeof val === 'number' && isNaN(val)) {
+          // keep physicalRow value if already in ctx, otherwise null
+          if (!Object.prototype.hasOwnProperty.call(ctx, field)) ctx[field] = null;
+        } else {
+          ctx[field] = val;
+        }
+      } catch (err) {
+        if (err instanceof ReferenceError) {
+          // keep physicalRow value if already in ctx, otherwise null
+          if (!Object.prototype.hasOwnProperty.call(ctx, field)) ctx[field] = null;
+        } else {
+          throw err;
+        }
+      }
     }
 
-    // render text templates
+    // render text templates — titleFull and annotation use type-specific templates
     const texts = {};
     for (const [field, tmpl] of Object.entries(textTemplates)) {
-      texts[field] = renderText(tmpl, ctx);
+      if (field === 'titleFull') {
+        texts[field] = renderText(titleFullTmpl, ctx);
+      } else if (field === 'annotation') {
+        texts[field] = renderText(annotationTmpl, ctx);
+      } else {
+        texts[field] = renderText(tmpl, ctx);
+      }
     }
 
     return {
@@ -92,6 +122,7 @@ function computeMasterData(questionnaire, template) {
       theme,
       color,
       priceBaseM,
+      moldType,
       weightPacked:  ctx.weightPacked,
       priceBase:     ctx.priceBase,
       priceDiscount: ctx.priceDiscount,
@@ -99,6 +130,8 @@ function computeMasterData(questionnaire, template) {
       toyTo:         ctx.toyTo,
       ...texts,
       ...staticFields,
+      topic,
+      purpose,
     };
   });
 }
