@@ -281,8 +281,49 @@ function VersionPicker({ versions, value, onChange, onRegenerate }) {
   );
 }
 
-function NormalizeView({ line }) {
-  const data = MASTER_DATA[line.id];
+const NORMALIZE_FIELDS = [
+  { key: 'moldSize',     label: 'Размер молда, см' },
+  { key: 'moldLength',   label: 'Длина молда, см' },
+  { key: 'moldWidth',    label: 'Ширина молда, см' },
+  { key: 'moldHeight',   label: 'Высота молда, см' },
+  { key: 'moldWeight',   label: 'Вес молда, г' },
+  { key: 'weightPacked', label: 'Вес с упаковкой, г' },
+  { key: 'priceBase',    label: 'Цена базовая, ₽' },
+  { key: 'priceDiscount',label: 'Цена со скидкой, ₽' },
+  { key: 'toyFrom',      label: 'Игрушка от, см' },
+  { key: 'toyTo',        label: 'Игрушка до, см' },
+];
+
+function apiArrayToRows(arr) {
+  return NORMALIZE_FIELDS.map(({ key, label }) => ({
+    label,
+    values: Object.fromEntries(arr.map(r => [r.size, r[key]])),
+  }));
+}
+
+function NormalizeView({ line, manifest }) {
+  const [rows, setRows] = useState(null);
+
+  useEffect(() => {
+    const stepMeta = manifest?.steps?.['01-normalize'];
+    if (stepMeta) {
+      apiFetch(`/lines/${line.id}/steps/01-normalize`)
+        .then(res => {
+          const arr = res.data?.['master-data.json'];
+          if (Array.isArray(arr)) setRows(apiArrayToRows(arr));
+        })
+        .catch(() => {});
+    } else {
+      // Fall back to mock for demo lines
+      const mock = MASTER_DATA[line.id];
+      setRows(mock?.rows ?? null);
+    }
+  }, [line.id, manifest]);
+
+  if (!rows) {
+    return <p className="text-sm pp-muted p-4">Мастер-данные ещё не созданы. Нажмите «Запустить шаг».</p>;
+  }
+
   return (
     <div className="pp-card rounded-lg overflow-hidden">
       <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
@@ -301,8 +342,8 @@ function NormalizeView({ line }) {
           </tr>
         </thead>
         <tbody>
-          {data.rows.map((row, i) => (
-            <tr key={row.label} className={i % 2 === 1 ? '' : ''} style={{ borderTop: '1px solid var(--line)' }}>
+          {rows.map((row, i) => (
+            <tr key={row.label} style={{ borderTop: '1px solid var(--line)', background: i % 2 ? 'transparent' : 'transparent' }}>
               <td className="p-3 pp-muted">{row.label}</td>
               {ALL_SIZES.map((s) => (
                 <td
@@ -321,8 +362,28 @@ function NormalizeView({ line }) {
   );
 }
 
-function TextsView({ line }) {
-  const texts = TEXTS[line.id] || {};
+function TextsView({ line, manifest }) {
+  const [textsData, setTextsData] = useState(null);
+
+  useEffect(() => {
+    const stepMeta = manifest?.steps?.['02-texts'];
+    if (stepMeta) {
+      apiFetch(`/lines/${line.id}/steps/02-texts`)
+        .then(res => {
+          const bySize = {};
+          for (const [name, payload] of Object.entries(res.data || {})) {
+            const size = name.replace('_texts.json', '');
+            bySize[size] = payload.texts || payload;
+          }
+          setTextsData(bySize);
+        })
+        .catch(() => {});
+    } else {
+      setTextsData(TEXTS[line.id] || {});
+    }
+  }, [line.id, manifest]);
+
+  const texts = textsData || TEXTS[line.id] || {};
   return (
     <div className="grid grid-cols-1 gap-3">
       {line.sizes.map((s) => {
@@ -331,9 +392,12 @@ function TextsView({ line }) {
           <div key={s} className="pp-card rounded-lg p-4">
             <div className="flex items-center gap-2 mb-2">
               <span className="pp-mono text-xs px-2 py-0.5 rounded-md bg-lavender-soft text-lavender-dark">{s}</span>
-              {t ? <span className="text-sm font-medium">{t.title}</span> : <span className="text-sm pp-muted">нет данных</span>}
+              {t ? <span className="text-sm font-medium">{t.titleShort || t.title}</span> : <span className="text-sm pp-muted">нет данных</span>}
             </div>
             {t && <p className="text-sm pp-muted" style={{ lineHeight: 1.6 }}>{t.annotation}</p>}
+            {t?.titleFull && t.titleFull !== t.titleShort && (
+              <p className="text-xs pp-muted mt-2" style={{ lineHeight: 1.5, borderTop: '1px solid var(--line)', paddingTop: 8 }}>{t.titleFull}</p>
+            )}
           </div>
         );
       })}
@@ -341,33 +405,54 @@ function TextsView({ line }) {
   );
 }
 
-function ImagesView({ line, onRegenItem }) {
-  const data = IMAGES[line.id] || {};
+function ImagesView({ line, manifest, onRegenItem }) {
+  const imgMeta = manifest?.steps?.['03-images'];
+  const history = imgMeta?.history || [];
+
+  // Build map: { 'M_main': { version, needsReview }, ... }
+  const done = {};
+  for (const h of history) {
+    const key = `${h.size}_${h.imageType}`;
+    if (!done[key] || h.version > done[key].version) done[key] = h;
+  }
+
+  const imgUrl = (size, imageType) => {
+    const h = done[`${size}_${imageType}`];
+    if (!h) return null;
+    return `/lines/${line.id}/steps/03-images/artifacts/${size}_${imageType}.png?version=${h.version}`;
+  };
+
   return (
     <div className="flex flex-col gap-4">
       {line.sizes.map((s) => (
         <div key={s} className="pp-card rounded-lg p-4">
           <div className="pp-mono text-xs px-2 py-0.5 rounded-md bg-lavender-soft text-lavender-dark inline-block mb-3">{s}</div>
-          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))' }}>
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
             {IMAGE_TYPES.map((type) => {
-              const count = data[s]?.[type.key] || 0;
-              const ready = count > 0;
+              const url  = imgUrl(s, type.key);
+              const meta = done[`${s}_${type.key}`];
               return (
-                <div key={type.key} className="rounded-lg p-3" style={{ border: '1px solid var(--line)', background: ready ? 'var(--paper)' : '#fff' }}>
-                  <div className="flex items-center justify-between mb-2">
-                    <ImageIcon size={16} className={ready ? '' : 'pp-muted'} aria-hidden="true" />
+                <div key={type.key} className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--line)' }}>
+                  <div className="relative" style={{ aspectRatio: '1', background: 'var(--paper)' }}>
+                    {url
+                      ? <img src={url} alt={`${s} ${type.label}`} className="w-full h-full object-cover" />
+                      : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={24} className="pp-muted" aria-hidden="true" /></div>
+                    }
+                    {meta?.needsReview && <span className="absolute top-1 right-1 text-xs bg-yellow-100 text-yellow-800 px-1 rounded">проверить</span>}
+                  </div>
+                  <div className="p-2 flex items-center justify-between">
+                    <span className="text-xs pp-muted">{type.label}</span>
                     <button className="pp-btn-ghost" onClick={() => onRegenItem(line.id, s, type.key)} aria-label={`Перегенерировать ${type.label} для ${s}`}>
                       <RotateCcw size={13} aria-hidden="true" />
                     </button>
                   </div>
-                  <div className="text-xs font-medium mb-1">{type.label}</div>
-                  <div className="text-xs pp-muted">{ready ? `${count} файл${count > 1 ? 'а' : ''}` : 'не сгенерировано'}</div>
                 </div>
               );
             })}
           </div>
         </div>
       ))}
+      {!imgMeta && <p className="text-sm pp-muted">Изображения ещё не генерировались. Нажмите «Перегенерировать».</p>}
     </div>
   );
 }
@@ -428,31 +513,75 @@ function AssembleView({ line }) {
   );
 }
 
-function StepperNav({ active, onSelect, lineId, manifests }) {
+// Returns { state: 'idle'|'partial'|'review'|'done', label?: string }
+function computeStepStatus(stepKey, manifest, lineSizes) {
+  const stepId   = STEP_KEY_TO_ID[stepKey];
+  const stepMeta = manifest?.steps?.[stepId];
+  if (!stepMeta) return { state: 'idle' };
+
+  const history = stepMeta.history || [];
+
+  if (stepKey === 'texts') {
+    const latest = {};
+    for (const h of history) latest[h.size] = h;
+    const done  = Object.keys(latest).length;
+    const total = (lineSizes || ALL_SIZES).length;
+    const review = Object.values(latest).some(h => h.needsReview);
+    if (review)       return { state: 'review',  label: `${done}/${total}` };
+    if (done < total) return { state: 'partial', label: `${done}/${total}` };
+    return { state: 'done', label: `${done}/${total}` };
+  }
+
+  if (stepKey === 'images') {
+    const latest = {};
+    for (const h of history) {
+      const key = `${h.size}_${h.imageType}`;
+      if (!latest[key] || h.version > latest[key].version) latest[key] = h;
+    }
+    const done  = Object.keys(latest).length;
+    const total = (lineSizes || ALL_SIZES).length * 4;
+    const review = Object.values(latest).some(h => h.needsReview);
+    if (review)       return { state: 'review',  label: `${done}/${total}` };
+    if (done < total) return { state: 'partial', label: `${done}/${total}` };
+    return { state: 'done', label: `${done}/${total}` };
+  }
+
+  return { state: 'done' };
+}
+
+const STATE_INDICATOR = {
+  done:    ({ label }) => <Check size={12} style={{ color: 'var(--sage-dark)', flexShrink: 0 }} aria-hidden="true" />,
+  partial: ({ label }) => <span style={{ fontSize: 10, color: 'var(--clay)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{label}</span>,
+  review:  ({ label }) => <span style={{ fontSize: 10, color: 'var(--clay-dark)', flexShrink: 0 }}>⚠{label ? ` ${label}` : ''}</span>,
+  idle:    () => null,
+};
+
+function StepperNav({ active, onSelect, lineId, manifests, line }) {
   return (
     <div className="flex items-center gap-1 overflow-x-auto pb-1">
       {STEPS.map((step, i) => {
-        const Icon = step.icon;
-        const isActive = step.key === active;
-        const lineVersions = (manifests && manifests[lineId]) ? manifestToVersions(manifests[lineId]) : VERSIONS[lineId] || {};
-        const hasData = (lineVersions[step.key] || []).length > 0;
+        const Icon      = step.icon;
+        const isActive  = step.key === active;
+        const manifest  = manifests?.[lineId];
+        const status    = computeStepStatus(step.key, manifest, line?.sizes);
+        const Indicator = STATE_INDICATOR[status.state];
         return (
           <div key={step.key} className="flex items-center">
             <button
               onClick={() => onSelect(step.key)}
               className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm"
               style={{
-                background: isActive ? 'var(--lavender)' : 'transparent',
-                color: isActive ? '#fff' : hasData ? 'var(--ink)' : 'var(--muted)',
-                border: '1px solid transparent',
+                background:  isActive ? 'var(--lavender)' : 'transparent',
+                color:       isActive ? '#fff' : status.state === 'idle' ? 'var(--muted)' : 'var(--ink)',
+                border:      '1px solid transparent',
                 borderColor: isActive ? 'var(--lavender)' : 'var(--line)',
-                whiteSpace: 'nowrap',
+                whiteSpace:  'nowrap',
               }}
             >
               <span className="pp-mono text-xs" style={{ opacity: 0.7 }}>{step.code}</span>
               <Icon size={14} aria-hidden="true" />
               {step.label}
-              {hasData && !isActive && <Check size={12} className="text-sage-dark" aria-hidden="true" />}
+              {!isActive && <Indicator label={status.label} />}
             </button>
             {i < STEPS.length - 1 && <div style={{ width: 12, height: 1, background: 'var(--line)' }} />}
           </div>
@@ -463,15 +592,15 @@ function StepperNav({ active, onSelect, lineId, manifests }) {
 }
 
 const SIZE_DEFAULTS = {
-  XS: { faceSize: 2,   moldLength: 3,   moldWidth: 1.25, moldHeight: 2.5,  moldWeight: 7   },
-  S:  { faceSize: 3,   moldLength: 4.5, moldWidth: 1.9,  moldHeight: 3.75, moldWeight: 25  },
-  M:  { faceSize: 4,   moldLength: 6,   moldWidth: 2.5,  moldHeight: 5,    moldWeight: 60  },
-  L:  { faceSize: 5,   moldLength: 7.5, moldWidth: 3.1,  moldHeight: 6.25, moldWeight: 117 },
-  XL: { faceSize: 6,   moldLength: 9,   moldWidth: 3.75, moldHeight: 7.5,  moldWeight: 202 },
+  XS: { moldSize: 2,   moldLength: 3,   moldWidth: 1.25, moldHeight: 2.5,  moldWeight: 7   },
+  S:  { moldSize: 3,   moldLength: 4.5, moldWidth: 1.9,  moldHeight: 3.75, moldWeight: 25  },
+  M:  { moldSize: 4,   moldLength: 6,   moldWidth: 2.5,  moldHeight: 5,    moldWeight: 60  },
+  L:  { moldSize: 5,   moldLength: 7.5, moldWidth: 3.1,  moldHeight: 6.25, moldWeight: 117 },
+  XL: { moldSize: 6,   moldLength: 9,   moldWidth: 3.75, moldHeight: 7.5,  moldWeight: 202 },
 };
 
 const SIZE_FIELDS = [
-  { key: 'faceSize',   label: 'Личико, см' },
+  { key: 'moldSize',   label: 'Размер, см' },
   { key: 'moldLength', label: 'Длина, см' },
   { key: 'moldWidth',  label: 'Ширина, см' },
   { key: 'moldHeight', label: 'Высота, см' },
@@ -481,10 +610,11 @@ const SIZE_FIELDS = [
 function QuestionnaireForm({ onSubmit, loading }) {
   const [form, setForm] = useState({
     moldName: '', article: '', brand: 'ТопМолд', theme: '', color: '', priceBaseM: 1000,
+    moldType: 'face',
     sizes: ALL_SIZES.map(size => ({ size, ...SIZE_DEFAULTS[size] })),
     artifacts: { images: true, video: true, ozon: true, wb: true },
   });
-  const [files, setFiles] = useState([]);
+  const [photoFiles, setPhotoFiles] = useState([]);
 
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
   const toggleArtifact = (key) => setForm((f) => ({ ...f, artifacts: { ...f.artifacts, [key]: !f.artifacts[key] } }));
@@ -500,6 +630,7 @@ function QuestionnaireForm({ onSubmit, loading }) {
     theme:      form.theme,
     color:      form.color,
     priceBaseM: Number(form.priceBaseM),
+    moldType:   form.moldType,
     sizes:      form.sizes,
     artifacts:  [
       form.artifacts.images && 'images',
@@ -538,12 +669,24 @@ function QuestionnaireForm({ onSubmit, loading }) {
 
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div>
-          <label className="pp-label">Базовая цена за размер M, ₽</label>
-          <input type="number" className="pp-input" value={form.priceBaseM} onChange={(e) => set('priceBaseM', e.target.value)} />
+          <label className="pp-label">Тип молда</label>
+          <select className="pp-select" value={form.moldType} onChange={(e) => set('moldType', e.target.value)}>
+            <option value="face">Лицо</option>
+            <option value="hands">Руки</option>
+            <option value="shoes">Обувь</option>
+            <option value="other">Другое</option>
+          </select>
         </div>
         <div>
           <label className="pp-label">Тема / персонаж</label>
           <input className="pp-input" placeholder="напр. ангелочек, кудрявая прядь" value={form.theme} onChange={(e) => set('theme', e.target.value)} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div>
+          <label className="pp-label">Базовая цена за размер M, ₽</label>
+          <input type="number" className="pp-input" value={form.priceBaseM} onChange={(e) => set('priceBaseM', e.target.value)} />
         </div>
       </div>
 
@@ -584,15 +727,16 @@ function QuestionnaireForm({ onSubmit, loading }) {
       </div>
 
       <div className="mb-4">
-        <label className="pp-label">Рендеры молда</label>
-        <label className="pp-btn" style={{ cursor: 'pointer', width: 'fit-content' }}>
-          <Upload size={14} aria-hidden="true" /> Загрузить файлы
-          <input type="file" multiple style={{ display: 'none' }} onChange={(e) => setFiles(Array.from(e.target.files || []).map((f) => f.name))} />
-        </label>
-        {files.length > 0 && (
-          <ul className="text-xs pp-muted mt-2" style={{ listStyle: 'none', padding: 0 }}>
-            {files.map((f) => <li key={f} className="pp-mono">{f}</li>)}
-          </ul>
+        <label className="pp-label">Фото молда</label>
+        <input
+          type="file"
+          multiple
+          accept="image/*"
+          className="pp-input"
+          onChange={(e) => setPhotoFiles(Array.from(e.target.files || []))}
+        />
+        {photoFiles.length > 0 && (
+          <span className="text-xs pp-muted mt-1" style={{ display: 'block' }}>{photoFiles.length} файл(ов) выбрано</span>
         )}
       </div>
 
@@ -613,7 +757,8 @@ function QuestionnaireForm({ onSubmit, loading }) {
         </div>
       </div>
 
-      <button className="pp-btn pp-btn-primary" disabled={loading} onClick={() => onSubmit(buildQuestionnaire())}>
+      {!form.article && <p className="text-xs mb-2" style={{ color: 'var(--clay-dark)' }}>Заполните поле «Артикульная серия» перед отправкой</p>}
+      <button className="pp-btn pp-btn-primary" disabled={loading || !form.article || !form.moldName} onClick={() => onSubmit(buildQuestionnaire())}>
         <Plus size={14} aria-hidden="true" /> {loading ? 'Запускаем…' : 'Сохранить и запустить пайплайн'}
       </button>
     </div>
@@ -647,8 +792,8 @@ function manifestToVersions(manifest) {
 }
 
 export default function PipelineApp() {
-  const [lines, setLines]           = useState(LINES);
-  const [activeLineId, setActiveLineId] = useState(LINES[0].id);
+  const [lines, setLines]           = useState([]);
+  const [activeLineId, setActiveLineId] = useState(null);
   const [activeTab, setActiveTab]   = useState('results');
   const [activeStep, setActiveStep] = useState('normalize');
   const [versionState, setVersionState] = useState({});
@@ -660,14 +805,11 @@ export default function PipelineApp() {
   useEffect(() => {
     apiFetch('/lines')
       .then(data => {
-        if (data.lines?.length) {
-          const apiLines = data.lines.map(l => ({ ...l, id: l.article, name: l.moldName || l.article, theme: '', color: '', status: 'active', sizes: l.sizes || ALL_SIZES }));
-          setLines(apiLines);
-          setActiveLineId(apiLines[0].id);
-        }
-        // else: keep mock LINES and mock activeLineId
+        const apiLines = (data.lines || []).map(l => ({ ...l, id: l.article, name: l.moldName || l.article, theme: '', color: '', status: 'active', sizes: l.sizes || ALL_SIZES }));
+        setLines(apiLines);
+        setActiveLineId(apiLines[0]?.id ?? null);
       })
-      .catch(() => { /* keep mock LINES */ });
+      .catch(() => {});
   }, []);
 
   // Fetch manifest whenever active line changes
@@ -679,9 +821,8 @@ export default function PipelineApp() {
 
   useEffect(() => { if (activeLineId) refreshManifest(activeLineId); }, [activeLineId, refreshManifest]);
 
-  const line         = lines.find((l) => l.id === activeLineId) || lines[0];
-  const liveVersions = manifests[activeLineId] ? manifestToVersions(manifests[activeLineId]) : null;
-  const versions     = liveVersions || VERSIONS[activeLineId] || {};
+  const line         = lines.find((l) => l.id === activeLineId) ?? lines[0] ?? null;
+  const versions     = manifests[activeLineId] ? manifestToVersions(manifests[activeLineId]) : {};
   const stepVersions = versions[activeStep] || [];
   const currentVersion = versionState[`${activeLineId}.${activeStep}`] ?? stepVersions[stepVersions.length - 1]?.v;
 
@@ -741,9 +882,9 @@ export default function PipelineApp() {
 
   const renderStep = () => {
     switch (activeStep) {
-      case 'normalize': return <NormalizeView line={line} />;
-      case 'texts': return <TextsView line={line} />;
-      case 'images': return <ImagesView line={line} onRegenItem={handleRegenerateItem} />;
+      case 'normalize': return <NormalizeView line={line} manifest={manifests[activeLineId]} />;
+      case 'texts': return <TextsView line={line} manifest={manifests[activeLineId]} />;
+      case 'images': return <ImagesView line={line} manifest={manifests[activeLineId]} onRegenItem={handleRegenerateItem} />;
       case 'video': return <VideoView line={line} onRegenItem={handleRegenerateItem} />;
       case 'excel': return <ExcelView line={line} />;
       case 'assemble': return <AssembleView line={line} />;
@@ -790,6 +931,16 @@ export default function PipelineApp() {
             </div>
           )}
 
+          {!line ? (
+            <div className="flex flex-col items-center justify-center" style={{ minHeight: 300, gap: 12 }}>
+              <p className="pp-display text-xl pp-muted" style={{ fontWeight: 400 }}>Нет линеек</p>
+              <p className="text-sm pp-muted">Создайте первую линейку молда</p>
+              <button className="pp-btn pp-btn-primary" onClick={() => setActiveTab('form')}>
+                <Plus size={14} aria-hidden="true" /> Новая линейка
+              </button>
+            </div>
+          ) : (<>
+
           <div className="flex items-center justify-between mb-4">
             <div>
               <div className="flex items-center gap-3">
@@ -821,7 +972,7 @@ export default function PipelineApp() {
             <QuestionnaireForm onSubmit={handleFormSubmit} loading={formLoading} />
           ) : (
             <>
-              <StepperNav active={activeStep} onSelect={setActiveStep} lineId={activeLineId} manifests={manifests} />
+              <StepperNav active={activeStep} onSelect={setActiveStep} lineId={activeLineId} manifests={manifests} line={line} />
               <div className="my-3">
                 <VersionPicker
                   versions={stepVersions}
@@ -833,6 +984,7 @@ export default function PipelineApp() {
               {renderStep()}
             </>
           )}
+          </>)}
         </main>
       </div>
     </div>
