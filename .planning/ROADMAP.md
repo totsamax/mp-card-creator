@@ -34,7 +34,7 @@ The pipeline skeleton is built but has never run end-to-end. Five phases close t
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 01-02-PLAN.md — Схема + данные: moldType/photos/moldSize в schema, секция moldTypes, templateEngine fallback
+- [x] 01-02-PLAN.md — Схема + данные: moldType/photos/moldSize в schema, секция moldTypes, templateEngine fallback
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -109,7 +109,7 @@ The pipeline skeleton is built but has never run end-to-end. Five phases close t
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Universal Mold Schema | 1/4 | In Progress|  |
+| 1. Universal Mold Schema | 2/4 | In Progress|  |
 | 2. Working Texts Step | 0/TBD | Not started | - |
 | 3. Working Images Step | 0/TBD | Not started | - |
 | 4. Connected Frontend | 0/TBD | Not started | - |

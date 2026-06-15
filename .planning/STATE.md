@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Completed 01-01-PLAN.md — busboy installed, node:test runner configured, 3 RED tests written"
-last_updated: "2026-06-15T20:22:35.400Z"
-last_activity: 2026-06-15 -- Phase 01 execution started
+stopped_at: "Completed 01-02-PLAN.md — moldType+photos+moldSize schema, moldTypes template section, typed templateEngine, tests A/B GREEN"
+last_updated: "2026-06-15T20:29:04Z"
+last_activity: 2026-06-15 -- Phase 01 Plan 02 completed
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 4
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-06-15)
 ## Current Position
 
 Phase: 01 (universal-mold-schema) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
-Last activity: 2026-06-15 -- Phase 01 execution started
+Last activity: 2026-06-15 -- Phase 01 Plan 02 completed
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -53,6 +53,7 @@ Progress: [░░░░░░░░░░] 0%
 
 *Updated after each plan completion*
 | Phase 01-universal-mold-schema P01 | 15 | 3 tasks | 5 files |
+| Phase 01-universal-mold-schema P02 | 7 | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -65,6 +66,8 @@ Recent decisions affecting current work:
 - Retry-цикл локально через прямой вызов хэндлера — YMQ не эмулируется
 - Фото молда — часть опросника, не отдельный шаг — обязательное поле INP-01
 - [Phase ?]: node --test requires glob pattern (not directory) for file discovery in Node.js v22
+- evalExpr NaN/ReferenceError does not overwrite physicalRow value — graceful fallback for partial questionnaire data
+- moldTypes section in template.master.json drives titleFull/annotation/topic/purpose per type (face/hands/shoes/other)
 
 ### Pending Todos
 
@@ -86,6 +89,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-15T20:22:35.394Z
-Stopped at: Completed 01-01-PLAN.md — busboy installed, node:test runner configured, 3 RED tests written
+Last session: 2026-06-15T20:29:04Z
+Stopped at: Completed 01-02-PLAN.md — moldType+photos+moldSize schema, moldTypes template section, typed templateEngine, tests A/B GREEN
 Resume file: None
