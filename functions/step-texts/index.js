@@ -23,7 +23,7 @@ exports.handler = async (event) => {
   const msg = parseMessage(event);
   if (!msg) return respond(400, { error: 'Invalid message' });
 
-  const { article, size, attempt = 1, feedback = [], force = false } = msg;
+  const { article, size, attempt = 1, feedback = [], force = false, attemptsLog = [] } = msg;
 
   // Load master data for this size
   const manifest  = await store.getManifest(article);
@@ -75,7 +75,7 @@ exports.handler = async (event) => {
       createdAt: new Date().toISOString(),
       inputHash,
       needsReview,
-      attempts: buildAttemptsLog(stepMeta, attempt, criticVerdict),
+      attempts: [...attemptsLog, { attempt, criticVerdict }],
     };
 
     await store.updateManifest(article, STEP_ID, {
@@ -86,9 +86,11 @@ exports.handler = async (event) => {
     return respond(200, { article, size, stepId: STEP_ID, version: nextVersion, needsReview, texts: generated });
   }
 
-  // Critic rejected — re-enqueue with feedback
-  await enqueueRetry({ article, size, attempt: attempt + 1, feedback: criticVerdict.issues, force });
-  return respond(202, { queued: true, article, size, attempt: attempt + 1, issues: criticVerdict.issues });
+  // Critic rejected — recurse directly (local retry, no YMQ)
+  return exports.handler({ body: JSON.stringify({
+    article, size, attempt: attempt + 1, feedback: criticVerdict.issues, force,
+    attemptsLog: [...attemptsLog, { attempt, criticVerdict }],
+  }) });
 };
 
 // ---------------------------------------------------------------------------
@@ -215,30 +217,6 @@ function runCritic(texts) {
 }
 
 // ---------------------------------------------------------------------------
-// Re-enqueue via YMQ (or direct call for local dev)
-// ---------------------------------------------------------------------------
-
-async function enqueueRetry(message) {
-  const queueUrl = process.env.YMQ_TEXTS_QUEUE_URL;
-  if (!queueUrl) {
-    // Local dev: log only (manual retry needed)
-    console.log('[step-texts] would enqueue retry:', message);
-    return;
-  }
-
-  // AWS SDK v3-compatible call to Yandex Message Queue
-  const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
-  const client = new SQSClient({
-    region:   'ru-central1',
-    endpoint: 'https://message-queue.api.cloud.yandex.net',
-  });
-  await client.send(new SendMessageCommand({
-    QueueUrl:    queueUrl,
-    MessageBody: JSON.stringify(message),
-  }));
-}
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -255,11 +233,6 @@ function parseMessage(event) {
   } catch {
     return null;
   }
-}
-
-function buildAttemptsLog(stepMeta, currentAttempt, criticVerdict) {
-  const prev = stepMeta?.history?.slice(-1)[0]?.attempts ?? [];
-  return [...prev, { attempt: currentAttempt, criticVerdict }];
 }
 
 function respond(statusCode, body) {
