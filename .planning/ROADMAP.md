@@ -57,7 +57,19 @@ The pipeline skeleton is built but has never run end-to-end. Five phases close t
   3. Если критик отклонил текст (ok: false), handler вызывает себя повторно напрямую — без YMQ URL — до 3 попыток
   4. Манифест содержит запись `attempts[]` с результатом каждой попытки (включая verdict критика)
 
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+**Wave 1**
+
+- [ ] 02-01-PLAN.md — Wave 0: падающий RED-контракт `test/step-texts.test.js` (рекурсия, подстановка, attempts, 5 размеров, runCritic-правила)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 02-02-PLAN.md — Локальный рекурсивный retry: замена enqueueRetry на `exports.handler`, накопление attemptsLog, терминация на MAX_ATTEMPTS (TXT-03)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 02-03-PLAN.md — Подстановка moldSize/topic/purpose (BUG-01), правила критика topicKeywordCheck + noUnresolvedPlaceholders, конфиги (TXT-01, TXT-02)
 
 ### Phase 3: Working Images Step
 
@@ -110,7 +122,7 @@ The pipeline skeleton is built but has never run end-to-end. Five phases close t
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Universal Mold Schema | 4/4 | Complete   | 2026-06-15 |
-| 2. Working Texts Step | 0/TBD | Not started | - |
+| 2. Working Texts Step | 0/3 | Planned | - |
 | 3. Working Images Step | 0/TBD | Not started | - |
 | 4. Connected Frontend | 0/TBD | Not started | - |
 | 5. E2E Validation | 0/TBD | Not started | - |
