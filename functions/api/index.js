@@ -105,6 +105,9 @@ exports.handler = async (event) => {
     if (!lineMatch) return respond(404, { error: 'Not found' });
 
     const article = decodeURIComponent(lineMatch[1]);
+    if (!/^[a-zA-Z0-9_-]{1,64}$/.test(article)) {
+      return respond(400, { error: 'Invalid article identifier' });
+    }
     const rest    = lineMatch[2] || '';
 
     // GET /lines/:id/manifest
@@ -227,7 +230,9 @@ async function handleCreateLine(event) {
   }
 
   const { article } = questionnaire;
-  if (!article) return respond(400, { error: 'questionnaire.article is required' });
+  if (!article || !/^[a-zA-Z0-9_-]{1,64}$/.test(article)) {
+    return respond(400, { error: 'Invalid or missing questionnaire.article' });
+  }
 
   const inputHash = crypto.createHash('sha256')
     .update(JSON.stringify({ questionnaire, templateVersion: template }))
