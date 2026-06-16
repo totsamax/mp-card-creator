@@ -7,7 +7,7 @@ The pipeline skeleton is built but has never run end-to-end. Five phases close t
 ## Phases
 
 - [x] **Phase 1: Universal Mold Schema** - Опросник принимает любой тип молда и фото как обязательные поля (completed 2026-06-15)
-- [ ] **Phase 2: Working Texts Step** - Тексты генерируются для реального типа молда, critic loop работает локально
+- [x] **Phase 2: Working Texts Step** - Тексты генерируются для реального типа молда, critic loop работает локально (completed 2026-06-16)
 - [ ] **Phase 3: Working Images Step** - Шаг 03-images запускается, слайды генерируются, сохраняются и видны в UI
 - [ ] **Phase 4: Connected Frontend** - UI показывает реальные данные из API, статусы шагов, ошибки
 - [ ] **Phase 5: E2E Validation** - Полный прогон pipeline конец-в-конец без ручного вмешательства
@@ -65,11 +65,11 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 02-02-PLAN.md — Локальный рекурсивный retry: замена enqueueRetry на `exports.handler`, накопление attemptsLog, терминация на MAX_ATTEMPTS (TXT-03)
+- [x] 02-02-PLAN.md — Локальный рекурсивный retry: замена enqueueRetry на `exports.handler`, накопление attemptsLog, терминация на MAX_ATTEMPTS (TXT-03)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 02-03-PLAN.md — Подстановка moldSize/topic/purpose (BUG-01), правила критика topicKeywordCheck + noUnresolvedPlaceholders, конфиги (TXT-01, TXT-02)
+- [x] 02-03-PLAN.md — Подстановка moldSize/topic/purpose (BUG-01), правила критика topicKeywordCheck + noUnresolvedPlaceholders, конфиги (TXT-01, TXT-02)
 
 ### Phase 3: Working Images Step
 
@@ -122,7 +122,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Universal Mold Schema | 4/4 | Complete   | 2026-06-15 |
-| 2. Working Texts Step | 1/3 | In Progress|  |
+| 2. Working Texts Step | 3/3 | Complete   | 2026-06-16 |
 | 3. Working Images Step | 0/TBD | Not started | - |
 | 4. Connected Frontend | 0/TBD | Not started | - |
 | 5. E2E Validation | 0/TBD | Not started | - |
