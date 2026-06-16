@@ -84,7 +84,19 @@ Plans:
   3. Фото молда из опросника используется как reference-изображение в промпте генерации — это видно в промпте, переданном в OpenAI API
   4. Изображения доступны в UI через GET /lines/:id/steps/03-images/artifacts/:name
 
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+**Wave 1**
+
+- [ ] 03-01-PLAN.md — Wave 0: падающий RED-контракт `test/step-images.test.js` (buildEditRequest export, 5 размеров, no-{{faceSize}}, attempts[], 400 no-photo, 202 route) + фикстура infographic.png
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 03-02-PLAN.md — Ядро: переписать generateImage на /v1/images/edits (фон+фото через FormData), рекурсивный retry + attemptsLog (D-10/D-11), {{faceSize}}→{{moldSize}}+{{topic}}/{{purpose}} (D-09/D-12), IMAGE_TYPES=['infographic'] (D-05), 400 no-photo (D-03)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 03-03-PLAN.md — GREEN: тест IMG-04 (artifacts GET → image/png) + IMG-01 (202 route), полный suite зелёный, human-verify кнопки → слайды в UI
 **UI hint**: yes
 
 ### Phase 4: Connected Frontend
@@ -123,6 +135,6 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Universal Mold Schema | 4/4 | Complete   | 2026-06-15 |
 | 2. Working Texts Step | 3/3 | Complete   | 2026-06-16 |
-| 3. Working Images Step | 0/TBD | Not started | - |
+| 3. Working Images Step | 0/3 | Not started | - |
 | 4. Connected Frontend | 0/TBD | Not started | - |
 | 5. E2E Validation | 0/TBD | Not started | - |
