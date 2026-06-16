@@ -204,6 +204,10 @@ async function handleCreateLine(event) {
       if (!f.mimeType || !f.mimeType.startsWith('image/')) {
         return respond(400, { error: 'Only image uploads allowed' });
       }
+      // Validate magic bytes — prevents MIME-type spoofing (WR-02)
+      if (!isImageBuffer(f.buffer)) {
+        return respond(400, { error: 'Uploaded file is not a recognized image format' });
+      }
       // Sanitize filename to prevent path traversal (T-01-03-01)
       const safeName = path.basename(f.filename || '').replace(/[^a-zA-Z0-9._-]/g, '_');
       if (!safeName || /^\.+$/.test(safeName) || !/[a-zA-Z0-9]/.test(safeName)) {
@@ -414,4 +418,16 @@ function respond(statusCode, body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   };
+}
+
+/**
+ * Validate image magic bytes — prevents MIME-type spoofing.
+ * Accepts PNG, JPEG, and WEBP buffers only.
+ */
+function isImageBuffer(buf) {
+  if (!buf || buf.length < 4) return false;
+  if (buf[0] === 0x89 && buf[1] === 0x50) return true; // PNG
+  if (buf[0] === 0xFF && buf[1] === 0xD8) return true; // JPEG
+  if (buf.length >= 12 && buf.slice(8, 12).toString('ascii') === 'WEBP') return true; // WEBP
+  return false;
 }
