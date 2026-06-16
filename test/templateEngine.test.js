@@ -13,14 +13,19 @@ test('A: moldType=hands returns 5 records, priceBase>0, titleFull has no "лич
   const questionnaire = {
     article: 'TEST01',
     moldType: 'hands',
+    moldName: 'TestMold',
+    brand: 'ТопМолд',
+    theme: 'Тест',
+    color: 'Белый',
+    priceBaseM: 1000,
     title: 'Молд для рук',
     category: 'Молды',
     sizes: [
-      { size: 'XS', moldSize: 50,  width: 40, height: 15, weight: 80,  priceBase: 490 },
-      { size: 'S',  moldSize: 65,  width: 52, height: 18, weight: 110, priceBase: 590 },
-      { size: 'M',  moldSize: 80,  width: 63, height: 20, weight: 145, priceBase: 690 },
-      { size: 'L',  moldSize: 95,  width: 74, height: 22, weight: 185, priceBase: 790 },
-      { size: 'XL', moldSize: 110, width: 85, height: 25, weight: 230, priceBase: 890 },
+      { size: 'XS', moldSize: 50,  moldLength: 5.0, moldWidth: 4.0, moldHeight: 1.5, moldWeight: 80  },
+      { size: 'S',  moldSize: 65,  moldLength: 6.5, moldWidth: 5.2, moldHeight: 1.8, moldWeight: 110 },
+      { size: 'M',  moldSize: 80,  moldLength: 8.0, moldWidth: 6.3, moldHeight: 2.0, moldWeight: 145 },
+      { size: 'L',  moldSize: 95,  moldLength: 9.5, moldWidth: 7.4, moldHeight: 2.2, moldWeight: 185 },
+      { size: 'XL', moldSize: 110, moldLength: 11,  moldWidth: 8.5, moldHeight: 2.5, moldWeight: 230 },
     ],
     photos: [],
     material: 'Платиновый силикон',
@@ -29,6 +34,9 @@ test('A: moldType=hands returns 5 records, priceBase>0, titleFull has no "лич
   const result = computeMasterData(questionnaire, template);
   assert.strictEqual(result.length, 5, 'should return 5 size records');
   assert.ok(result[2].priceBase > 0, 'priceBase for M should be > 0');
+  // M size: round(priceBaseM * (moldSizeM / moldSizeM), 10) = round(1000 * 1, 10) = 1000; allow ±50 for rounding
+  assert.ok(Math.abs(result[2].priceBase - 1000) <= 50,
+    `priceBase for M should be ~1000 (formula result), got ${result[2].priceBase}`);
   assert.ok(!result[2].titleFull || !result[2].titleFull.includes('личико'),
     'titleFull should not contain "личико" for moldType=hands');
 });
@@ -37,14 +45,19 @@ test('B: unknown moldType falls back to static values without throwing', () => {
   const questionnaire = {
     article: 'TEST02',
     moldType: 'unknown-type-xyz',
+    moldName: 'TestMold',
+    brand: 'ТопМолд',
+    theme: 'Тест',
+    color: 'Белый',
+    priceBaseM: 1000,
     title: 'Молд',
     category: 'Молды',
     sizes: [
-      { size: 'XS', moldSize: 50,  width: 40, height: 15, weight: 80,  priceBase: 490 },
-      { size: 'S',  moldSize: 65,  width: 52, height: 18, weight: 110, priceBase: 590 },
-      { size: 'M',  moldSize: 80,  width: 63, height: 20, weight: 145, priceBase: 690 },
-      { size: 'L',  moldSize: 95,  width: 74, height: 22, weight: 185, priceBase: 790 },
-      { size: 'XL', moldSize: 110, width: 85, height: 25, weight: 230, priceBase: 890 },
+      { size: 'XS', moldSize: 50,  moldLength: 5.0, moldWidth: 4.0, moldHeight: 1.5, moldWeight: 80  },
+      { size: 'S',  moldSize: 65,  moldLength: 6.5, moldWidth: 5.2, moldHeight: 1.8, moldWeight: 110 },
+      { size: 'M',  moldSize: 80,  moldLength: 8.0, moldWidth: 6.3, moldHeight: 2.0, moldWeight: 145 },
+      { size: 'L',  moldSize: 95,  moldLength: 9.5, moldWidth: 7.4, moldHeight: 2.2, moldWeight: 185 },
+      { size: 'XL', moldSize: 110, moldLength: 11,  moldWidth: 8.5, moldHeight: 2.5, moldWeight: 230 },
     ],
     photos: [],
     material: 'Платиновый силикон',

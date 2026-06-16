@@ -15,14 +15,19 @@ test('C: POST /lines with multipart event.files creates a product line', async (
   const questionnaire = {
     article: 'SMOKE01',
     moldType: 'hands',
+    moldName: 'ТестМолд',
+    brand: 'ТопМолд',
+    theme: 'Тест',
+    color: 'Белый',
+    priceBaseM: 1000,
     title: 'Тестовый молд',
     category: 'Молды',
     sizes: [
-      { size: 'XS', moldSize: 50,  width: 40, height: 15, weight: 80,  priceBase: 490 },
-      { size: 'S',  moldSize: 65,  width: 52, height: 18, weight: 110, priceBase: 590 },
-      { size: 'M',  moldSize: 80,  width: 63, height: 20, weight: 145, priceBase: 690 },
-      { size: 'L',  moldSize: 95,  width: 74, height: 22, weight: 185, priceBase: 790 },
-      { size: 'XL', moldSize: 110, width: 85, height: 25, weight: 230, priceBase: 890 },
+      { size: 'XS', moldSize: 50,  moldLength: 5.0, moldWidth: 4.0, moldHeight: 1.5, moldWeight: 80  },
+      { size: 'S',  moldSize: 65,  moldLength: 6.5, moldWidth: 5.2, moldHeight: 1.8, moldWeight: 110 },
+      { size: 'M',  moldSize: 80,  moldLength: 8.0, moldWidth: 6.3, moldHeight: 2.0, moldWeight: 145 },
+      { size: 'L',  moldSize: 95,  moldLength: 9.5, moldWidth: 7.4, moldHeight: 2.2, moldWeight: 185 },
+      { size: 'XL', moldSize: 110, moldLength: 11,  moldWidth: 8.5, moldHeight: 2.5, moldWeight: 230 },
     ],
     photos: [],
     material: 'Платиновый силикон',
@@ -53,4 +58,10 @@ test('C: POST /lines with multipart event.files creates a product line', async (
   // Check that photos were saved
   assert.ok(body.questionnaire && Array.isArray(body.questionnaire.photos) && body.questionnaire.photos.length > 0,
     'questionnaire.photos should be non-empty array after multipart upload');
+
+  // Verify master-data is well-formed (no undefined tokens)
+  if (body.masterData && body.masterData[2]) {
+    assert.ok(!String(body.masterData[2].titleFull || '').includes('undefined'),
+      'titleFull should not contain "undefined"');
+  }
 });
