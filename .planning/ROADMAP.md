@@ -61,7 +61,7 @@ The pipeline skeleton is built but has never run end-to-end. Five phases close t
 Plans:
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — Wave 0: падающий RED-контракт `test/step-texts.test.js` (рекурсия, подстановка, attempts, 5 размеров, runCritic-правила)
+- [x] 02-01-PLAN.md — Wave 0: падающий RED-контракт `test/step-texts.test.js` (рекурсия, подстановка, attempts, 5 размеров, runCritic-правила)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -122,7 +122,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Universal Mold Schema | 4/4 | Complete   | 2026-06-15 |
-| 2. Working Texts Step | 0/3 | Planned | - |
+| 2. Working Texts Step | 1/3 | In Progress|  |
 | 3. Working Images Step | 0/TBD | Not started | - |
 | 4. Connected Frontend | 0/TBD | Not started | - |
 | 5. E2E Validation | 0/TBD | Not started | - |

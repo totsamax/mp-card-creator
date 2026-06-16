@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-03-PLAN.md — multipart POST /lines wired, busboy in local-server.js, photos saved via versionStore, all 3 tests A/B/C GREEN
-last_updated: "2026-06-16T10:43:29.573Z"
-last_activity: 2026-06-15 -- Phase 01 Plan 03 completed
+stopped_at: Completed 02-01-PLAN.md — RED test contract for step-texts, 7 tests (4 RED), suite exits non-zero
+last_updated: "2026-06-16T11:01:18.715Z"
+last_activity: 2026-06-16 -- Phase 02 execution started
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 7
+  completed_plans: 5
   percent: 20
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-15)
 
 **Core value:** Залил опросник + фото молда → получил готовый пакет для публикации на Ozon/WB.
-**Current focus:** Phase 01 — universal-mold-schema
+**Current focus:** Phase 02 — working-texts-step
 
 ## Current Position
 
-Phase: 01 (universal-mold-schema) — EXECUTING
-Plan: 4 of 4
+Phase: 02 (working-texts-step) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-06-15 -- Phase 01 Plan 03 completed
+Last activity: 2026-06-16 -- Phase 02 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -56,6 +56,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01-universal-mold-schema P02 | 7 | 3 tasks | 4 files |
 | Phase 01-universal-mold-schema P03 | 12 | 2 tasks | 2 files |
 | Phase 01-universal-mold-schema P04 | 35 | 3 tasks | 1 files |
+| Phase 02-working-texts-step P01 | 4 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -76,6 +77,7 @@ Recent decisions affecting current work:
 - [Phase ?]: FormData без ручного Content-Type — браузер сам выставляет boundary; apiFetch не используется для multipart
 - [Phase ?]: photoFiles хранят File-объекты (не имена) — реальные данные для fd.append() в FormData
 - [Phase ?]: activeTab=form рендерит QuestionnaireForm независимо от lines.length — форма доступна сразу при открытии UI
+- [Phase ?]: RED test contract для step-texts — test/step-texts.test.js покрывает TXT-01/02/03 и DEC-03 runCritic
 
 ### Pending Todos
 
@@ -97,6 +99,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-15T20:54:56.319Z
-Stopped at: Completed 01-03-PLAN.md — multipart POST /lines wired, busboy in local-server.js, photos saved via versionStore, all 3 tests A/B/C GREEN
+Last session: 2026-06-16T11:01:18.676Z
+Stopped at: Completed 02-01-PLAN.md — RED test contract for step-texts, 7 tests (4 RED), suite exits non-zero
 Resume file: None

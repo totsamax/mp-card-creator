@@ -13,9 +13,9 @@
 
 ### Тексты
 
-- [ ] **TXT-01**: Генерируются тексты для всех 5 размеров (XS–XL) на основе мастер-данных и типа молда
-- [ ] **TXT-02**: Промпты учитывают тип молда из опросника — не упоминают «лицо» когда молд для рук
-- [ ] **TXT-03**: Generator-critic цикл работает локально (retry идёт через прямой вызов хэндлера, без YMQ)
+- [x] **TXT-01**: Генерируются тексты для всех 5 размеров (XS–XL) на основе мастер-данных и типа молда
+- [x] **TXT-02**: Промпты учитывают тип молда из опросника — не упоминают «лицо» когда молд для рук
+- [x] **TXT-03**: Generator-critic цикл работает локально (retry идёт через прямой вызов хэндлера, без YMQ)
 
 ### Изображения
 
@@ -68,9 +68,9 @@
 | INP-01 | Phase 1 | Complete |
 | INP-02 | Phase 1 | Complete |
 | INP-03 | Phase 1 | Complete |
-| TXT-01 | Phase 2 | Pending |
-| TXT-02 | Phase 2 | Pending |
-| TXT-03 | Phase 2 | Pending |
+| TXT-01 | Phase 2 | Complete |
+| TXT-02 | Phase 2 | Complete |
+| TXT-03 | Phase 2 | Complete |
 | IMG-01 | Phase 3 | Pending |
 | IMG-02 | Phase 3 | Pending |
 | IMG-03 | Phase 3 | Pending |
