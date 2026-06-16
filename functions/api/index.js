@@ -194,9 +194,11 @@ async function handleCreateLine(event) {
     }
     force = event.formFields && event.formFields.force === 'true';
 
-    // Save each uploaded photo via versionStore (T-01-03-01 path traversal mitigation)
+    // Validate article before any store call (T-01-03-01 path traversal mitigation)
     const { article } = questionnaire;
-    if (!article) return respond(400, { error: 'questionnaire.article is required' });
+    if (!article || !/^[a-zA-Z0-9_-]{1,64}$/.test(article)) {
+      return respond(400, { error: 'Invalid or missing questionnaire.article' });
+    }
 
     const photoRefs = [];
     for (const f of event.files) {
