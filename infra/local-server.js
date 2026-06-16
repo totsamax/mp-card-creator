@@ -57,76 +57,95 @@ http.createServer(async (req, res) => {
   const ct = req.headers['content-type'] || '';
   let event;
 
-  if (ct.startsWith('multipart/form-data')) {
-    // busboy parses multipart stream into memory; handler receives formFields + files
-    const Busboy = require('busboy');
-    const { fields, files } = await new Promise((resolve, reject) => {
-      const bb = Busboy({ headers: req.headers, limits: { fileSize: 15 * 1024 * 1024, files: 10 } });
-      const fields = {};
-      const files = [];
-      bb.on('field', (name, val) => { fields[name] = val; });
-      bb.on('file', (name, stream, info) => {
-        const chunks = [];
-        stream.on('data', c => chunks.push(c));
-        stream.on('end', () => files.push({
-          field: name,
-          filename: info.filename,
-          mimeType: info.mimeType,
-          buffer: Buffer.concat(chunks),
-        }));
+  try {
+    if (ct.startsWith('multipart/form-data')) {
+      // busboy parses multipart stream into memory; handler receives formFields + files
+      const Busboy = require('busboy');
+      const { fields, files } = await new Promise((resolve, reject) => {
+        const bb = Busboy({ headers: req.headers, limits: { fileSize: 15 * 1024 * 1024, files: 10 } });
+        const fields = {};
+        const files = [];
+        let truncatedCount = 0;
+        bb.on('field', (name, val) => { fields[name] = val; });
+        bb.on('file', (name, stream, info) => {
+          const chunks = [];
+          let fileTruncated = false;
+          stream.on('data', c => chunks.push(c));
+          stream.on('limit', () => { fileTruncated = true; truncatedCount = truncatedCount + 1; });
+          stream.on('end', () => {
+            if (fileTruncated) return; // skip truncated file; reject below on close
+            files.push({
+              field: name,
+              filename: info.filename,
+              mimeType: info.mimeType,
+              buffer: Buffer.concat(chunks),
+            });
+          });
+        });
+        bb.on('close', () => {
+          if (truncatedCount > 0) {
+            return reject(new Error(`File too large: ${truncatedCount} file(s) exceeded 15 MB limit`));
+          }
+          resolve({ fields, files });
+        });
+        bb.on('error', reject);
+        req.pipe(bb);
       });
-      bb.on('close', () => resolve({ fields, files }));
-      bb.on('error', reject);
-      req.pipe(bb);
+      event = {
+        httpMethod:            req.method,
+        url:                   url.pathname,
+        path:                  url.pathname,
+        queryStringParameters: Object.fromEntries(url.searchParams),
+        headers:               req.headers,
+        formFields:            fields,
+        files,
+        body:                  null,
+        isBase64Encoded:       false,
+      };
+    } else {
+      // JSON path — existing logic unchanged
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      const rawBody = Buffer.concat(chunks).toString() || null;
+      event = {
+        httpMethod:            req.method,
+        url:                   url.pathname,
+        path:                  url.pathname,
+        queryStringParameters: Object.fromEntries(url.searchParams),
+        headers:               req.headers,
+        body:                  rawBody,
+        isBase64Encoded:       false,
+      };
+    }
+
+    const logBody = event.body && event.body.length < 500 ? ' body=' + event.body : (event.files ? ` files=${event.files.length}` : '');
+    console.log(`[api] ${req.method} ${url.pathname}${logBody}`);
+
+    const result = await handler(event).catch(err => {
+      console.error('[api] unhandled:', err);
+      return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
     });
-    event = {
-      httpMethod:            req.method,
-      url:                   url.pathname,
-      path:                  url.pathname,
-      queryStringParameters: Object.fromEntries(url.searchParams),
-      headers:               req.headers,
-      formFields:            fields,
-      files,
-      body:                  null,
-      isBase64Encoded:       false,
-    };
-  } else {
-    // JSON path — existing logic unchanged
-    const chunks = [];
-    for await (const chunk of req) chunks.push(chunk);
-    const rawBody = Buffer.concat(chunks).toString() || null;
-    event = {
-      httpMethod:            req.method,
-      url:                   url.pathname,
-      path:                  url.pathname,
-      queryStringParameters: Object.fromEntries(url.searchParams),
-      headers:               req.headers,
-      body:                  rawBody,
-      isBase64Encoded:       false,
-    };
-  }
 
-  const logBody = event.body && event.body.length < 500 ? ' body=' + event.body : (event.files ? ` files=${event.files.length}` : '');
-  console.log(`[api] ${req.method} ${url.pathname}${logBody}`);;
+    if (result.statusCode >= 400) {
+      console.warn(`[api] ${result.statusCode} ${req.method} ${url.pathname} → ${result.body}`);
+    }
 
-  const result = await handler(event).catch(err => {
-    console.error('[api] unhandled:', err);
-    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
-  });
-
-  if (result.statusCode >= 400) {
-    console.warn(`[api] ${result.statusCode} ${req.method} ${url.pathname} → ${result.body}`);
-  }
-
-  const contentType = result.headers?.['Content-Type'] || 'application/json';
-  res.writeHead(result.statusCode, {
-    'Content-Type': contentType,
-    ...corsHeaders(),
-  });
-  if (result.isBase64Encoded && result.body) {
-    res.end(Buffer.from(result.body, 'base64'));
-  } else {
-    res.end(result.body);
+    const contentType = result.headers?.['Content-Type'] || 'application/json';
+    res.writeHead(result.statusCode, {
+      'Content-Type': contentType,
+      ...corsHeaders(),
+    });
+    if (result.isBase64Encoded && result.body) {
+      res.end(Buffer.from(result.body, 'base64'));
+    } else {
+      res.end(result.body);
+    }
+  } catch (err) {
+    const isTooLarge = err.message && err.message.startsWith('File too large');
+    const statusCode = isTooLarge ? 413 : 500;
+    console.error(`[api] ${statusCode} ${req.method} ${url.pathname}:`, err.message);
+    res.writeHead(statusCode, { 'Content-Type': 'application/json', ...corsHeaders() });
+    res.end(JSON.stringify({ error: err.message }));
   }
 }).listen(PORT, () => {
   console.log(`[local-server] API listening on http://localhost:${PORT}`);
