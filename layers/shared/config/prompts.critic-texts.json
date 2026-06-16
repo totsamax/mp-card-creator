@@ -21,5 +21,16 @@
     "titleFull":  ["молд", "силиконовый"],
     "annotation": []
   },
-  "bannedPhrases": ["бесплатная доставка", "лучший", "100%"]
+  "bannedPhrases": ["бесплатная доставка", "лучший", "100%"],
+  "topicKeywordCheck": {
+    "enabled": true,
+    "field": "titleFull",
+    "message": "titleFull не содержит ключевых слов из темы товара"
+  },
+  "noUnresolvedPlaceholders": {
+    "enabled": true,
+    "field": "annotation",
+    "pattern": "\\{\\{[^}]+\\}\\}",
+    "message": "annotation содержит нераскрытый плейсхолдер"
+  }
 }

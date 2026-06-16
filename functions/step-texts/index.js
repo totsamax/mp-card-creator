@@ -55,7 +55,7 @@ exports.handler = async (event) => {
   }
 
   // --- Critic (rule-based) ---
-  const criticVerdict = runCritic(generated);
+  const criticVerdict = runCritic(generated, sizeRecord.topic);
 
   if (criticVerdict.ok || attempt >= MAX_ATTEMPTS) {
     // Save result
@@ -108,12 +108,14 @@ async function generateTexts(sizeRecord, feedback) {
   const userPrompt = promptsTmpl.generate.user
     .replace('{{moldName}}',      sizeRecord.moldName)
     .replace('{{theme}}',         sizeRecord.theme)
-    .replace('{{faceSize}}',      sizeRecord.faceSize)
+    .replace('{{moldSize}}',      sizeRecord.moldSize)
     .replace('{{moldLength}}',    sizeRecord.moldLength)
     .replace('{{moldWidth}}',     sizeRecord.moldWidth)
     .replace('{{moldHeight}}',    sizeRecord.moldHeight)
     .replace('{{color}}',         sizeRecord.color)
     .replace('{{brand}}',         sizeRecord.brand)
+    .replace('{{topic}}',         sizeRecord.topic)
+    .replace('{{purpose}}',       sizeRecord.purpose)
     .replace('{{feedbackBlock}}', feedbackBlock);
 
   // USE_STUB=true → skip API call, use template-computed texts from master data
@@ -190,7 +192,7 @@ function templateTexts(sizeRecord) {
 // Critic — rule-based (no LLM)
 // ---------------------------------------------------------------------------
 
-function runCritic(texts) {
+function runCritic(texts, topic) {
   const issues = [];
 
   for (const rule of criticRules.rules) {
@@ -213,8 +215,26 @@ function runCritic(texts) {
     }
   }
 
+  const tk = criticRules.topicKeywordCheck;
+  if (tk?.enabled && topic) {
+    const topicWords = topic.toLowerCase().split(/[\s,]+/).filter(w => w.length >= 4);
+    const fieldVal = (texts[tk.field] ?? '').toLowerCase();
+    if (!topicWords.some(w => fieldVal.includes(w))) {
+      issues.push(tk.message);
+    }
+  }
+
+  const np = criticRules.noUnresolvedPlaceholders;
+  if (np?.enabled) {
+    if (new RegExp(np.pattern).test(texts[np.field] ?? '')) {
+      issues.push(np.message);
+    }
+  }
+
   return { ok: issues.length === 0, issues };
 }
+
+exports.runCritic = runCritic;
 
 // ---------------------------------------------------------------------------
 // Helpers
