@@ -1,7 +1,7 @@
 ---
 phase: 01
 plan: all
-status: reviewed
+status: fixed
 depth: standard
 files_reviewed: 8
 files_reviewed_list:
