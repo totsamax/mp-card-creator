@@ -206,7 +206,7 @@ async function handleCreateLine(event) {
       }
       // Sanitize filename to prevent path traversal (T-01-03-01)
       const safeName = path.basename(f.filename || '').replace(/[^a-zA-Z0-9._-]/g, '_');
-      if (!safeName) {
+      if (!safeName || /^\.+$/.test(safeName) || !/[a-zA-Z0-9]/.test(safeName)) {
         return respond(400, { error: 'Invalid filename in upload' });
       }
       await store.putArtifact(article, 'photos', 1, safeName, f.buffer);
