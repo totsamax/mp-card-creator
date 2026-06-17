@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-01-PLAN.md — RED test contract for step-texts, 7 tests (4 RED), suite exits non-zero
-last_updated: "2026-06-17T09:15:58.320Z"
-last_activity: 2026-06-17 -- Phase 03 execution started
+stopped_at: Completed 03-02-PLAN.md — step-images rewritten as Edits-API compositor, suite GREEN (6/6)
+last_updated: "2026-06-17T00:00:00.000Z"
+last_activity: 2026-06-17 -- Completed Phase 03 Plan 02 (Edits-API compositor)
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 10
-  completed_plans: 7
-  percent: 40
+  completed_plans: 9
+  percent: 50
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-15)
 ## Current Position
 
 Phase: 03 (working-images-step) — EXECUTING
-Plan: 1 of 3
+Plan: 3 of 3
 Status: Executing Phase 03
-Last activity: 2026-06-17 -- Phase 03 execution started
+Last activity: 2026-06-17 -- Completed Phase 03 Plan 02 (Edits-API compositor)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
@@ -57,6 +57,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01-universal-mold-schema P03 | 12 | 2 tasks | 2 files |
 | Phase 01-universal-mold-schema P04 | 35 | 3 tasks | 1 files |
 | Phase 02-working-texts-step P01 | 4 | 2 tasks | 1 files |
+| Phase 03-working-images-step P02 | 12 | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,8 @@ Recent decisions affecting current work:
 - [Phase ?]: photoFiles хранят File-объекты (не имена) — реальные данные для fd.append() в FormData
 - [Phase ?]: activeTab=form рендерит QuestionnaireForm независимо от lines.length — форма доступна сразу при открытии UI
 - [Phase ?]: RED test contract для step-texts — test/step-texts.test.js покрывает TXT-01/02/03 и DEC-03 runCritic
+- [Phase 03]: step-images переписан на /v1/images/edits (фон-шаблон + фото молда через FormData), buildEditRequest экспортирован, рекурсивный retry + attemptsLog (D-10/D-11)
+- [Phase 03]: substitutePrompt использует глобальный regex (/{{token}}/g), не String.replace — повторяющиеся токены резолвятся, gate "no unresolved {{...}}" проходит
 
 ### Pending Todos
 
@@ -85,8 +88,8 @@ None yet.
 
 ### Blockers/Concerns
 
-- step-images не запускается (ошибка роутинга или запуска) — причина выясняется в Phase 3
-- enqueueRetry в step-texts/step-images молча no-ops без YMQ URL — фиксируется в Phase 2
+- ~~step-images не запускается~~ — RESOLVED Phase 03 P02: переписан на Edits-API, suite GREEN
+- ~~enqueueRetry в step-texts/step-images молча no-ops без YMQ URL~~ — RESOLVED: enqueueRetry удалён из обоих, рекурсивный retry
 - frontend/PipelineApp.jsx строки 73–190 хардкодные константы — убираются в Phase 4
 
 ## Deferred Items
@@ -99,6 +102,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-16T11:01:18.676Z
-Stopped at: Completed 02-01-PLAN.md — RED test contract for step-texts, 7 tests (4 RED), suite exits non-zero
+Last session: 2026-06-17T00:00:00.000Z
+Stopped at: Completed 03-02-PLAN.md — step-images Edits-API compositor, suite GREEN (6/6)
 Resume file: None

@@ -92,7 +92,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 03-02-PLAN.md — Ядро: переписать generateImage на /v1/images/edits (фон+фото через FormData), рекурсивный retry + attemptsLog (D-10/D-11), {{faceSize}}→{{moldSize}}+{{topic}}/{{purpose}} (D-09/D-12), IMAGE_TYPES=['infographic'] (D-05), 400 no-photo (D-03)
+- [x] 03-02-PLAN.md — Ядро: переписать generateImage на /v1/images/edits (фон+фото через FormData), рекурсивный retry + attemptsLog (D-10/D-11), {{faceSize}}→{{moldSize}}+{{topic}}/{{purpose}} (D-09/D-12), IMAGE_TYPES=['infographic'] (D-05), 400 no-photo (D-03)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -136,6 +136,6 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Universal Mold Schema | 4/4 | Complete   | 2026-06-15 |
 | 2. Working Texts Step | 3/3 | Complete   | 2026-06-16 |
-| 3. Working Images Step | 1/3 | In Progress|  |
+| 3. Working Images Step | 2/3 | In Progress|  |
 | 4. Connected Frontend | 0/TBD | Not started | - |
 | 5. E2E Validation | 0/TBD | Not started | - |
