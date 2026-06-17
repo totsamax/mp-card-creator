@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const path   = require('path');
+const fs     = require('fs');
 
 const SHARED = process.env.SHARED_LAYER_PATH || path.resolve(__dirname, '../../layers/shared');
 
@@ -13,16 +14,16 @@ const STEP_ID      = '03-images';
 const MAX_ATTEMPTS = 3;
 
 /**
- * YMQ message shape:
- *   { article, size, imageType, attempt, feedback?, force? }
+ * Message shape:
+ *   { article, size, imageType, attempt, feedback?, force?, attemptsLog? }
  *
- * imageType: 'main' | 'infographic' | 'scale' | 'lifestyle'
+ * imageType: 'infographic' (single-type MVP — see api IMAGE_TYPES)
  */
 exports.handler = async (event) => {
   const msg = parseMessage(event);
   if (!msg) return respond(400, { error: 'Invalid message' });
 
-  const { article, size, imageType, attempt = 1, feedback = [], force = false } = msg;
+  const { article, size, imageType, attempt = 1, feedback = [], force = false, attemptsLog = [] } = msg;
   if (!imageType) return respond(400, { error: 'imageType is required' });
 
   // Load master data
@@ -34,6 +35,11 @@ exports.handler = async (event) => {
   const masterData    = JSON.parse(masterDataBuf.toString());
   const sizeRecord    = masterData.find(r => r.size === size);
   if (!sizeRecord) return respond(400, { error: `Size "${size}" not found in master data` });
+
+  // No mold photo → 400 (D-03). Checked at the handler level so a missing photo
+  // always yields 400 regardless of API key / stub path.
+  const photoNames = await store.listArtifacts(article, 'photos', 1);
+  if (!photoNames || photoNames.length === 0) return respond(400, { error: 'no mold photo found' });
 
   const stepMeta  = manifest?.steps?.[STEP_ID];
   const inputHash = sha256(JSON.stringify({ sizeRecord, imageType, promptsTmpl }));
@@ -47,10 +53,12 @@ exports.handler = async (event) => {
   }
 
   // --- Generate image ---
+  console.log(`[step-images] generating ${article} ${size}/${imageType} attempt=${attempt}`);
   let imageBuffer;
   try {
-    imageBuffer = await generateImage(sizeRecord, imageType, feedback);
+    imageBuffer = await generateImage(article, sizeRecord, imageType, feedback);
   } catch (err) {
+    console.error(`[step-images] generation failed ${size}/${imageType}:`, err.message);
     return respond(500, { error: `Image generation failed: ${err.message}` });
   }
 
@@ -78,7 +86,7 @@ exports.handler = async (event) => {
       createdAt: new Date().toISOString(),
       inputHash,
       needsReview,
-      attempts: buildAttemptsLog(stepMeta, attempt, criticVerdict),
+      attempts: [...attemptsLog, { attempt, criticVerdict }],
     };
 
     await store.updateManifest(article, STEP_ID, {
@@ -87,53 +95,111 @@ exports.handler = async (event) => {
       ...(needsReview ? { overrides: { [artifactName]: `v${nextVersion}` } } : {}),
     });
 
+    console.log(`[step-images] saved ${article} ${size}/${imageType} → v${nextVersion}${needsReview ? ' ⚠ needsReview' : ' ✓'}`);
     return respond(200, {
       article, size, imageType, stepId: STEP_ID,
       version: nextVersion, needsReview, artifactName,
     });
   }
 
-  // Critic rejected — re-enqueue
-  await enqueueRetry({ article, size, imageType, attempt: attempt + 1, feedback: criticVerdict.issues, force });
-  return respond(202, { queued: true, article, size, imageType, attempt: attempt + 1, issues: criticVerdict.issues });
+  // Critic rejected — recurse directly (local retry, no YMQ)
+  return exports.handler({ body: JSON.stringify({
+    article, size, imageType, attempt: attempt + 1, feedback: criticVerdict.issues, force,
+    attemptsLog: [...attemptsLog, { attempt, criticVerdict }],
+  }) });
 };
 
 // ---------------------------------------------------------------------------
-// Image generation (OpenAI Images API)
+// Prompt building (image-in-image composition)
 // ---------------------------------------------------------------------------
 
-async function generateImage(sizeRecord, imageType, feedback) {
-  const apiKey = process.env.OPENAI_API_KEY;
+function substitutePrompt(sizeRecord, imageType) {
+  const tmpl = promptsTmpl.prompts[imageType] || promptsTmpl.prompts.infographic;
+  return tmpl
+    .replace(/\{\{moldName\}\}/g,   sizeRecord.moldName)
+    .replace(/\{\{moldSize\}\}/g,   sizeRecord.moldSize)
+    .replace(/\{\{color\}\}/g,      sizeRecord.color)
+    .replace(/\{\{moldLength\}\}/g, sizeRecord.moldLength)
+    .replace(/\{\{moldWidth\}\}/g,  sizeRecord.moldWidth)
+    .replace(/\{\{moldHeight\}\}/g, sizeRecord.moldHeight)
+    .replace(/\{\{toyFrom\}\}/g,    sizeRecord.toyFrom)
+    .replace(/\{\{toyTo\}\}/g,      sizeRecord.toyTo)
+    .replace(/\{\{topic\}\}/g,      sizeRecord.topic)
+    .replace(/\{\{purpose\}\}/g,    sizeRecord.purpose);
+}
 
-  let prompt = (promptsTmpl.prompts[imageType] || promptsTmpl.prompts.main)
-    .replace('{{moldName}}',   sizeRecord.moldName)
-    .replace('{{faceSize}}',   sizeRecord.faceSize)
-    .replace('{{color}}',      sizeRecord.color)
-    .replace('{{moldLength}}', sizeRecord.moldLength)
-    .replace('{{moldWidth}}',  sizeRecord.moldWidth)
-    .replace('{{moldHeight}}', sizeRecord.moldHeight)
-    .replace('{{toyFrom}}',    sizeRecord.toyFrom)
-    .replace('{{toyTo}}',      sizeRecord.toyTo);
+/**
+ * buildEditRequest(article, sizeRecord, imageType, feedback)
+ *   → Promise<{ prompt, imageCount }>
+ *
+ * prompt: composition instruction with all tokens resolved.
+ * imageCount: 1 (background template) + number of mold photos.
+ */
+async function buildEditRequest(article, sizeRecord, imageType, feedback = []) {
+  let prompt = substitutePrompt(sizeRecord, imageType);
 
   if (feedback.length > 0) {
     prompt += promptsTmpl.feedbackSuffix.replace('{{issues}}', feedback.join('; '));
   }
 
+  const photoNames = await store.listArtifacts(article, 'photos', 1);
+  return { prompt, imageCount: 1 + (photoNames ? photoNames.length : 0) };
+}
+
+exports.buildEditRequest = buildEditRequest;
+
+// ---------------------------------------------------------------------------
+// Image generation (OpenAI Images Edits API — image-in-image compositor)
+// ---------------------------------------------------------------------------
+
+async function generateImage(article, sizeRecord, imageType, feedback) {
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  let prompt = substitutePrompt(sizeRecord, imageType);
+  if (feedback.length > 0) {
+    prompt += promptsTmpl.feedbackSuffix.replace('{{issues}}', feedback.join('; '));
+  }
+
   if (!apiKey) {
-    // Stub: return a 1x1 transparent PNG
+    // Stub: return a 1x1 transparent PNG (returns BEFORE any template/photo read)
     return Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
       'base64'
     );
   }
 
-  const res = await fetch('https://api.openai.com/v1/images/generations', {
+  // Read background template
+  const templatePath = path.join(SHARED, 'templates', `${imageType}.png`);
+  let bgBuffer;
+  try {
+    bgBuffer = fs.readFileSync(templatePath);
+  } catch (err) {
+    throw new Error(`Background template not found: ${templatePath}. Add ${imageType}.png to layers/shared/templates/`);
+  }
+
+  // Read all mold photos
+  const photoNames = await store.listArtifacts(article, 'photos', 1);
+  const photoBuffers = [];
+  for (const name of (photoNames || [])) {
+    photoBuffers.push(await store.getArtifact(article, 'photos', 1, name));
+  }
+
+  // Build multipart form: image[] = [background, ...photos]
+  const form = new FormData();
+  form.append('model', 'gpt-image-1');
+  form.append('prompt', prompt);
+  form.append('size', '1024x1024');
+  form.append('image[]', new Blob([bgBuffer], { type: 'image/png' }), `${imageType}.png`);
+  photoBuffers.forEach((buf, i) => form.append('image[]', new Blob([buf], { type: 'image/png' }), `mold-${i}.png`));
+
+  // NO manual Content-Type — undici derives the multipart boundary.
+  const res = await fetch('https://api.openai.com/v1/images/edits', {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model: 'gpt-image-1', prompt, n: 1, size: '1024x1024', response_format: 'b64_json' }),
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body:    form,
   });
 
-  if (!res.ok) throw new Error(`OpenAI Images API error: ${res.status} ${await res.text()}`);
+  if (!res.ok) throw new Error(`OpenAI Images Edits API error: ${res.status} ${await res.text()}`);
   const data = await res.json();
   return Buffer.from(data.data[0].b64_json, 'base64');
 }
@@ -185,27 +251,6 @@ async function runCritic(imageBuffer, sizeRecord, imageType) {
 }
 
 // ---------------------------------------------------------------------------
-// YMQ re-enqueue
-// ---------------------------------------------------------------------------
-
-async function enqueueRetry(message) {
-  const queueUrl = process.env.YMQ_IMAGES_QUEUE_URL;
-  if (!queueUrl) {
-    console.log('[step-images] would enqueue retry:', message);
-    return;
-  }
-  const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
-  const client = new SQSClient({
-    region:   'ru-central1',
-    endpoint: 'https://message-queue.api.cloud.yandex.net',
-  });
-  await client.send(new SendMessageCommand({
-    QueueUrl:    queueUrl,
-    MessageBody: JSON.stringify(message),
-  }));
-}
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -219,11 +264,6 @@ function parseMessage(event) {
   } catch {
     return null;
   }
-}
-
-function buildAttemptsLog(stepMeta, currentAttempt, criticVerdict) {
-  const prev = stepMeta?.history?.slice(-1)[0]?.attempts ?? [];
-  return [...prev, { attempt: currentAttempt, criticVerdict }];
 }
 
 function respond(statusCode, body) {
