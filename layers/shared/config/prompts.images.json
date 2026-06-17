@@ -1,9 +1,9 @@
 {
   "imageTypes": ["main", "infographic", "scale", "lifestyle"],
   "prompts": {
-    "main": "Product photo of a silicone mold for cotton toy doll face. Mold name: {{moldName}}, face size {{faceSize}} cm, color: {{color}}. White background, studio lighting, sharp focus on the relief texture. Top-down and 3/4 view.",
-    "infographic": "Infographic for marketplace listing. Silicone mold «{{moldName}}», {{color}} color. Show dimensions: {{moldLength}}x{{moldWidth}}x{{moldHeight}} cm clearly labeled. Include face size {{faceSize}} cm callout. Clean white background, professional product design.",
-    "scale": "Silicone mold «{{moldName}}» ({{faceSize}} cm face size, {{color}}) placed next to a finished cotton wool doll showing the scale. The doll should be approximately {{toyFrom}}–{{toyTo}} cm tall. Warm crafting studio background.",
+    "main": "Product photo of a silicone mold for cotton toy doll face. Mold name: {{moldName}}, mold size {{moldSize}} cm, color: {{color}}. White background, studio lighting, sharp focus on the relief texture. Top-down and 3/4 view.",
+    "infographic": "Compose a marketplace infographic slide by placing the supplied mold photo(s) onto the provided background template. Do NOT redraw the mold — composite the real photo of the silicone mold «{{moldName}}» ({{color}}, {{topic}} for {{purpose}}) into the central product area of the template, keeping its relief texture intact and well lit. Position the mold photo centered in the upper two-thirds of the slide. Overlay text blocks: the mold name «{{moldName}}» as the heading, the dimensions {{moldLength}}×{{moldWidth}}×{{moldHeight}} cm and the mold size {{moldSize}} cm as a callout in the lower band. Keep the background template's layout, colors and branding; only fill the product slot and text placeholders. Clean, professional, high-contrast.",
+    "scale": "Silicone mold «{{moldName}}» ({{moldSize}} cm, {{color}}) placed next to a finished cotton wool doll showing the scale. The doll should be approximately {{toyFrom}}–{{toyTo}} cm tall. Warm crafting studio background.",
     "lifestyle": "Lifestyle flat lay: silicone mold «{{moldName}}» in {{color}} surrounded by crafting supplies — cotton wool, acrylic paints, brushes. Warm natural light, wooden table, cozy creative atmosphere."
   },
   "feedbackSuffix": " Previous attempt was rejected. Issues to fix: {{issues}}"

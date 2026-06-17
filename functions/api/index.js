@@ -9,7 +9,7 @@ const template = require(path.join(SHARED, 'config/template.master.json'));
 const { computeMasterData } = require(path.join(SHARED, 'templateEngine'));
 
 const SIZES       = ['XS', 'S', 'M', 'L', 'XL'];
-const IMAGE_TYPES = ['main', 'infographic', 'scale', 'lifestyle'];
+const IMAGE_TYPES = ['infographic'];
 const VIDEO_TYPES = ['turntable', 'detail', 'lifestyle'];
 
 const STEP_QUEUES = {
