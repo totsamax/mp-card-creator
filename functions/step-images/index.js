@@ -56,8 +56,15 @@ exports.handler = async (event) => {
   // --- Generate image ---
   console.log(`[step-images] generating ${article} ${size}/${imageType} attempt=${attempt}`);
   let imageBuffer;
+  let generationStub = false;
   try {
-    imageBuffer = await generateImage(article, sizeRecord, imageType, feedback);
+    const result = await generateImage(article, sizeRecord, imageType, feedback);
+    if (result && result.stub) {
+      imageBuffer = result.buffer;
+      generationStub = true;
+    } else {
+      imageBuffer = result;
+    }
   } catch (err) {
     console.error(`[step-images] generation failed ${size}/${imageType}:`, err.message);
     return respond(500, { error: `Image generation failed: ${err.message}` });
@@ -75,7 +82,7 @@ exports.handler = async (event) => {
 
   if (criticVerdict.ok || attempt >= MAX_ATTEMPTS) {
     const nextVersion  = (stepMeta?.currentVersion ?? 0) + 1;
-    const needsReview  = !criticVerdict.ok;
+    const needsReview  = !criticVerdict.ok || generationStub;
     const artifactName = `${size}_${imageType}.png`;
 
     await store.putArtifact(article, STEP_ID, nextVersion, artifactName, imageBuffer);
@@ -200,7 +207,14 @@ async function generateImage(article, sizeRecord, imageType, feedback) {
     body:    form,
   });
 
-  if (!res.ok) throw new Error(`OpenAI Images Edits API error: ${res.status} ${await res.text()}`);
+  if (!res.ok) {
+    const errText = await res.text();
+    console.warn(`[step-images] Images Edits API error (${res.status}), falling back to stub:`, errText.slice(0, 200));
+    return { stub: true, buffer: Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      'base64'
+    )};
+  }
   const data = await res.json();
   return Buffer.from(data.data[0].b64_json, 'base64');
 }
