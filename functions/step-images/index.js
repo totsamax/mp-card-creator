@@ -5,7 +5,7 @@ const path   = require('path');
 const fs     = require('fs');
 
 const SHARED       = process.env.SHARED_LAYER_PATH || path.resolve(__dirname, '../../layers/shared');
-const OPENAI_BASE        = (process.env.OPENAI_BASE_URL || 'https://api.openai.com').replace(/\/$/, '');
+const OPENAI_BASE        = (process.env.OPENAI_BASE_URL || 'https://api.openai.com').replace(/\/$/, '').replace(/\/v\d+$/, '');
 const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
 
 const store        = require(path.join(SHARED, 'versionStore'));
