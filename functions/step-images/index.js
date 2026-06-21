@@ -4,7 +4,8 @@ const crypto = require('crypto');
 const path   = require('path');
 const fs     = require('fs');
 
-const SHARED = process.env.SHARED_LAYER_PATH || path.resolve(__dirname, '../../layers/shared');
+const SHARED       = process.env.SHARED_LAYER_PATH || path.resolve(__dirname, '../../layers/shared');
+const OPENAI_BASE  = (process.env.OPENAI_BASE_URL || 'https://api.openai.com').replace(/\/$/, '');
 
 const store        = require(path.join(SHARED, 'versionStore'));
 const promptsTmpl  = require(path.join(SHARED, 'config/prompts.images.json'));
@@ -193,7 +194,7 @@ async function generateImage(article, sizeRecord, imageType, feedback) {
   photoBuffers.forEach((buf, i) => form.append('image[]', new Blob([buf], { type: 'image/png' }), `mold-${i}.png`));
 
   // NO manual Content-Type — undici derives the multipart boundary.
-  const res = await fetch('https://api.openai.com/v1/images/edits', {
+  const res = await fetch(`${OPENAI_BASE}/v1/images/edits`, {
     method:  'POST',
     headers: { Authorization: `Bearer ${apiKey}` },
     body:    form,

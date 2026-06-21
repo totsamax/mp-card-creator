@@ -9,6 +9,8 @@ const store        = require(path.join(SHARED, 'versionStore'));
 const promptsTmpl  = require(path.join(SHARED, 'config/prompts.texts.json'));
 const criticRules  = require(path.join(SHARED, 'config/prompts.critic-texts.json'));
 
+const OPENAI_BASE  = (process.env.OPENAI_BASE_URL || 'https://api.openai.com').replace(/\/$/, '');
+
 const STEP_ID      = '02-texts';
 const MAX_ATTEMPTS = 3;
 
@@ -158,7 +160,7 @@ async function generateTexts(sizeRecord, feedback) {
 
   if (openaiKey) {
     try {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      const res = await fetch(`${OPENAI_BASE}/v1/chat/completions`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${openaiKey}` },
         body: JSON.stringify({
