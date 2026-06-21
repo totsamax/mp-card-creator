@@ -10,6 +10,7 @@ const promptsTmpl  = require(path.join(SHARED, 'config/prompts.texts.json'));
 const criticRules  = require(path.join(SHARED, 'config/prompts.critic-texts.json'));
 
 const OPENAI_BASE  = (process.env.OPENAI_BASE_URL || 'https://api.openai.com').replace(/\/$/, '');
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
 const STEP_ID      = '02-texts';
 const MAX_ATTEMPTS = 3;
@@ -164,7 +165,7 @@ async function generateTexts(sizeRecord, feedback) {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${openaiKey}` },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
+          model: OPENAI_MODEL,
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: promptsTmpl.generate.system },

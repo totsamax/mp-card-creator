@@ -5,7 +5,8 @@ const path   = require('path');
 const fs     = require('fs');
 
 const SHARED       = process.env.SHARED_LAYER_PATH || path.resolve(__dirname, '../../layers/shared');
-const OPENAI_BASE  = (process.env.OPENAI_BASE_URL || 'https://api.openai.com').replace(/\/$/, '');
+const OPENAI_BASE        = (process.env.OPENAI_BASE_URL || 'https://api.openai.com').replace(/\/$/, '');
+const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
 
 const store        = require(path.join(SHARED, 'versionStore'));
 const promptsTmpl  = require(path.join(SHARED, 'config/prompts.images.json'));
@@ -194,7 +195,7 @@ async function generateImage(article, sizeRecord, imageType, feedback) {
 
   // Build multipart form: image[] = [background, ...photos]
   const form = new FormData();
-  form.append('model', 'gpt-image-1');
+  form.append('model', OPENAI_IMAGE_MODEL);
   form.append('prompt', prompt);
   form.append('size', '1024x1024');
   form.append('image[]', new Blob([bgBuffer], { type: 'image/png' }), `${imageType}.png`);
