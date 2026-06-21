@@ -65,13 +65,13 @@ Exceptions (pre-existing, NOT introduced this phase — leave as-is):
 
 ## Typography
 
-Locked from existing `STYLES`. Sizes in use: 12, 13, and display sizes via `.pp-display`.
+Locked from existing `STYLES`. Exactly 4 sizes in the contract: 12 / 13 / 20 / 24.
 
 | Role | Size | Weight | Line Height |
 |------|------|--------|-------------|
-| Body | 13px (`text-sm`) | 400 (Inter regular) | 1.5 (annotations use 1.6, pre-existing) |
 | Label / meta | 12px (`text-xs`, `.pp-label`) | 500 (Inter medium) | 1.5 |
-| Heading | 18–20px (`text-lg` / `text-xl`, `.pp-display`) | 500 (Fraunces medium) | 1.2 |
+| Body | 13px (`text-sm`) | 400 (Inter regular) | 1.5 (annotations use 1.6, pre-existing) |
+| Heading | 20px (`text-xl`, `.pp-display`) | 500 (Fraunces medium) | 1.2 |
 | Display | 24px (`text-2xl`, `.pp-display`) | 500 (Fraunces medium) | 1.2 |
 
 Weights: regular (400) for body, medium (500) for emphasis/labels/headings. (Fraunces 600 and
@@ -110,6 +110,13 @@ exclusively — red symbol `✘` in `--clay` / `--clay-dark` in StepperNav, and 
 ## Interaction States (NEW this phase)
 
 These are the contracts Phase 4 adds. Executor implements exactly these; checker validates them.
+
+### Focal point (main screen)
+The primary focal point of the main screen is the **active step body** (the central content panel
+showing the selected step's data — master-data table / texts / images). The left sidebar (220px) is
+secondary navigation; the StepperNav row is tertiary. Visual hierarchy: the lavender accent draws the
+eye first to the active sidebar line and active stepper tab, which lead into the central step body.
+On first load with no lines, the focal point is the empty-state CTA "Создайте первую →".
 
 ### Step status indicator (StepperNav, D-03/D-04)
 `computeStepStatus` gains state `error`, detected by presence of `manifest.steps[stepId].error`.
@@ -158,16 +165,16 @@ All copy in Russian (`response_language: ru`). Locked from CONTEXT.md + Claude's
 |---------|------|
 | Primary CTA (new line) | "Новая линейка" / form submit: "Сохранить и запустить пайплайн" |
 | Primary CTA (run step) | "Запустить шаг" (idle step) / "Перегенерировать" (existing version) / "Обновить статус" (manual poll) |
-| Primary CTA (retry failed) | "Повторить" |
+| Primary CTA (retry failed) | "Повторить шаг" |
 | Empty state — no lines (D-09) | Heading: "Линеек пока нет." Body + CTA: "Создайте первую →" (button opens QuestionnaireForm) |
 | Empty state — step not run (D-08) | "Шаг ещё не запускался" + "Запустить шаг" button |
 | Empty state — normalize | "Мастер-данные ещё не созданы. Нажмите «Запустить шаг»." |
-| Empty state — texts size | "нет данных" (per-size inline) |
+| Empty state — texts size | "Тексты для размера ещё не сгенерированы. Нажмите «Запустить шаг»." (per-size inline) |
 | Empty state — images | "Изображения ещё не генерировались. Нажмите «Перегенерировать»." |
 | Empty state — video (D-12) | "Видео: шаг не запущен" (per size; step-04 out of scope) |
 | Empty state — excel (D-12) | "Выгрузка не сформирована" (no `05-excel` in manifest) |
 | Empty state — assemble (D-13) | Summary of completed steps + versions from manifest; no tree render |
-| Error state — step failed (D-05) | Show `manifest.steps[stepId].error` text verbatim, prefixed "Ошибка шага:" + "Повторить" button below |
+| Error state — step failed (D-05) | Show `manifest.steps[stepId].error` text verbatim, prefixed "Ошибка шага:" + "Повторить шаг" button below |
 | Error state — list load failed | "Не удалось загрузить линейки. Проверьте, что сервер запущен, и обновите страницу." |
 | Loading | "Загрузка…" (inline, `--muted`) |
 | Toast — pipeline started | "Опросник сохранён, пайплайн запущен" |
