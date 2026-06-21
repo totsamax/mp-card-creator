@@ -271,3 +271,29 @@ test('IMG-01: POST /lines/:id/steps/03-images/regenerate returns 202', async () 
   assert.strictEqual(result.statusCode, 202,
     `expected 202 from regenerate route, got ${result.statusCode}: ${result.body}`);
 });
+
+// ---------------------------------------------------------------------------
+// IMG-04: generated slide is retrievable via GET artifacts
+// ---------------------------------------------------------------------------
+
+test('IMG-04: GET /lines/:id/steps/03-images/artifacts/M_infographic.png returns image/png', async () => {
+  const article = 'IMG04A';
+  await createLine(article, 'hands');
+
+  const { statusCode, body: genBody } = await runImages(article, 'M');
+  assert.strictEqual(statusCode, 200, `generation failed: ${JSON.stringify(genBody)}`);
+
+  const result = await apiHandler({
+    httpMethod: 'GET',
+    path: `/lines/${article}/steps/03-images/artifacts/M_infographic.png`,
+    queryStringParameters: {},
+    headers: {},
+    body: '',
+    isBase64Encoded: false,
+  });
+  assert.strictEqual(result.statusCode, 200,
+    `expected 200 from artifact GET, got ${result.statusCode}: ${result.body}`);
+  assert.strictEqual(result.headers['Content-Type'], 'image/png',
+    `expected Content-Type image/png, got: ${result.headers['Content-Type']}`);
+  assert.ok(result.isBase64Encoded, 'response should be base64 encoded');
+});
