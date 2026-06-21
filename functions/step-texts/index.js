@@ -98,8 +98,10 @@ exports.handler = async (event) => {
 // ---------------------------------------------------------------------------
 
 async function generateTexts(sizeRecord, feedback) {
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  const openaiKey    = process.env.OPENAI_API_KEY;
+  const anthropicKey    = process.env.ANTHROPIC_API_KEY;
+  const openaiKey       = process.env.OPENAI_API_KEY;
+  const openrouterKey   = process.env.OPENROUTER_API_KEY;
+  const openrouterModel = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
 
   const feedbackBlock = feedback.length > 0
     ? promptsTmpl.feedbackBlock.replace('{{issues}}', feedback.map(i => `• ${i}`).join('\n'))
@@ -119,7 +121,7 @@ async function generateTexts(sizeRecord, feedback) {
     .replace('{{feedbackBlock}}', feedbackBlock);
 
   // USE_STUB=true → skip API call, use template-computed texts from master data
-  if (process.env.USE_STUB === 'true' || (!anthropicKey && !openaiKey)) {
+  if (process.env.USE_STUB === 'true' || (!anthropicKey && !openaiKey && !openrouterKey)) {
     return templateTexts(sizeRecord);
   }
 
@@ -172,7 +174,40 @@ async function generateTexts(sizeRecord, feedback) {
       const data = await res.json();
       return JSON.parse(data.choices[0].message.content);
     } catch (err) {
-      console.warn('[step-texts] OpenAI unavailable, using stub:', err.message);
+      if (openrouterKey) {
+        console.warn('[step-texts] OpenAI unavailable, trying OpenRouter:', err.message);
+      } else {
+        console.warn('[step-texts] OpenAI unavailable, using stub:', err.message);
+        return templateTexts(sizeRecord);
+      }
+    }
+  }
+
+  if (openrouterKey) {
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method:  'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${openrouterKey}`,
+          'HTTP-Referer':  'https://github.com/mp-card-creator',
+          'X-Title':       'mp-card-creator',
+        },
+        body: JSON.stringify({
+          model:    openrouterModel,
+          messages: [
+            { role: 'system', content: promptsTmpl.generate.system },
+            { role: 'user',   content: userPrompt },
+          ],
+        }),
+      });
+      if (!res.ok) throw new Error(`OpenRouter API error: ${res.status} ${await res.text()}`);
+      const data    = await res.json();
+      const content = data.choices[0].message.content;
+      const jsonStr = (content.match(/\{[\s\S]*\}/) || [content])[0];
+      return JSON.parse(jsonStr);
+    } catch (err) {
+      console.warn('[step-texts] OpenRouter unavailable, using stub:', err.message);
       return templateTexts(sizeRecord);
     }
   }
