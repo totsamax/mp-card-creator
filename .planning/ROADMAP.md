@@ -8,8 +8,8 @@ The pipeline skeleton is built but has never run end-to-end. Five phases close t
 
 - [x] **Phase 1: Universal Mold Schema** - Опросник принимает любой тип молда и фото как обязательные поля (completed 2026-06-15)
 - [x] **Phase 2: Working Texts Step** - Тексты генерируются для реального типа молда, critic loop работает локально (completed 2026-06-16)
-- [ ] **Phase 3: Working Images Step** - Шаг 03-images запускается, слайды генерируются, сохраняются и видны в UI
-- [ ] **Phase 4: Connected Frontend** - UI показывает реальные данные из API, статусы шагов, ошибки
+- [x] **Phase 3: Working Images Step** - Шаг 03-images запускается, слайды генерируются, сохраняются и видны в UI (completed 2026-06-22)
+- [x] **Phase 4: Connected Frontend** - UI показывает реальные данные из API, статусы шагов, ошибки (completed 2026-06-22)
 - [ ] **Phase 5: E2E Validation** - Полный прогон pipeline конец-в-конец без ручного вмешательства
 
 ## Phase Details
@@ -96,7 +96,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 03-03-PLAN.md — GREEN: тест IMG-04 (artifacts GET → image/png) + IMG-01 (202 route), полный suite зелёный, human-verify кнопки → слайды в UI
+- [x] 03-03-PLAN.md — GREEN: тест IMG-04 (artifacts GET → image/png) + IMG-01 (202 route), полный suite зелёный, human-verify кнопки → слайды в UI
 
 **UI hint**: yes
 
@@ -113,10 +113,10 @@ Plans:
   3. Шаг, завершившийся с ошибкой, отображается в UI как «упал» (не «запущен» и не «готов»)
   4. Когда шаг падает, манифест содержит поля `error` и `failedAt` — UI читает их для отображения статуса
 
-**Plans**: 2 of 3 complete
+**Plans**: 3 of 3 complete
 - [x] 04-01-PLAN.md — Step error capture: manifest `{ error, failedAt }` on step failure (REL-01)
 - [x] 04-02-PLAN.md — Frontend mock removal: all 7 mock constants deleted, API-driven views, VersionPicker history, empty/error states (UI-01, UI-02)
-- [ ] 04-03-PLAN.md
+- [x] 04-03-PLAN.md — Error/Polling UI: error step state (clay ✘), failed-step view + retry, optimistic running on 202, 5s polling, manual refresh button (UI-03, REL-01)
 **UI hint**: yes
 
 ### Phase 5: E2E Validation
@@ -139,6 +139,6 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Universal Mold Schema | 4/4 | Complete   | 2026-06-15 |
 | 2. Working Texts Step | 3/3 | Complete   | 2026-06-16 |
-| 3. Working Images Step | 2/3 | In Progress|  |
-| 4. Connected Frontend | 2/3 | In Progress | - |
+| 3. Working Images Step | 3/3 | Complete   | 2026-06-22 |
+| 4. Connected Frontend | 3/3 | Complete   | 2026-06-22 |
 | 5. E2E Validation | 0/TBD | Not started | - |

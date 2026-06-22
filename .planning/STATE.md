@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 4 UI-SPEC approved
-last_updated: "2026-06-22T16:30:37.328Z"
-last_activity: 2026-06-22 -- Phase 04 execution started
+stopped_at: Phase 4 complete — all 3 plans done
+last_updated: "2026-06-22T18:00:00.000Z"
+last_activity: 2026-06-22 -- Phase 04 complete (04-03: error state, polling, optimistic UI)
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 13
-  completed_plans: 11
-  percent: 65
+  completed_plans: 12
+  percent: 80
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-06-15)
 
 ## Current Position
 
-Phase: 04 (connected-frontend) — EXECUTING
-Plan: 3 of 3
-Status: Executing Phase 04
-Last activity: 2026-06-22 -- Plan 04-02 complete (frontend mock removal, UI-01/UI-02)
+Phase: 04 (connected-frontend) — COMPLETE
+Plan: 3 of 3 (all done)
+Status: Phase 04 complete — advancing to Phase 05 (E2E Validation)
+Last activity: 2026-06-22 -- Plan 04-03 complete (error state, polling, optimistic UI; UI-03/REL-01)
 
-Progress: [██████▌░░░] 65%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: [██████▌░░░] 65%
 | Phase 03-working-images-step P02 | 12 | 3 tasks | 3 files |
 | Phase 04-connected-frontend P01 | 10 | 2 tasks | 4 files |
 | Phase 04-connected-frontend P02 | 25 | 3 tasks | 1 files |
+| Phase 04-connected-frontend P03 | 30 | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -87,6 +88,9 @@ Recent decisions affecting current work:
 - [Phase 04 P01]: RED-тесты инжектят throw через monkeypatch store.putArtifact — детерминированно, без сети и AI-ключей
 - [Phase 04 P02]: UI-01/UI-02 — все 7 mock-констант удалены из PipelineApp.jsx, UI читает только из API; новая линейка добавляется через setLines(prev) без reload
 - [Phase 04 P02]: VideoView всегда «Видео: шаг не запущен» (step-04 вне scope); VersionPicker label = v{N} · {date} · {N} разм. из реальной manifest history
+- [Phase 04 P03]: D-03 — computeStepStatus error branch в самом начале (до done/partial), приоритет выше любого другого состояния
+- [Phase 04 P03]: D-04 — STATE_INDICATOR.error = clay ✘ (var(--clay-dark)), никаких новых hex-цветов для error
+- [Phase 04 P03]: D-01/D-02 — setInterval 5s + clearInterval cleanup в useEffect keyed on runningCount; optimistic running сразу после 202 (до первого poll)
 
 ### Pending Todos
 
@@ -108,6 +112,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-22T16:31:16.000Z
-Stopped at: Completed 04-02-PLAN.md
+Last session: 2026-06-22T18:00:00.000Z
+Stopped at: Phase 04 complete — 04-03 done (error state, polling, optimistic UI; human-verify approved)
 Resume file: None
