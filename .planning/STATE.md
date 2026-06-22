@@ -4,12 +4,12 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 4 UI-SPEC approved
-last_updated: "2026-06-22T16:29:04.042Z"
-last_activity: 2026-06-17 -- Completed Phase 03 Plan 02 (Edits-API compositor)
+last_updated: "2026-06-22T16:30:37.328Z"
+last_activity: 2026-06-22 -- Phase 04 execution started
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 10
+  total_plans: 13
   completed_plans: 10
   percent: 60
 ---
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-15)
 
 **Core value:** Залил опросник + фото молда → получил готовый пакет для публикации на Ozon/WB.
-**Current focus:** Phase 03 — working-images-step
+**Current focus:** Phase 04 — connected-frontend
 
 ## Current Position
 
-Phase: 03 (working-images-step) — EXECUTING
-Plan: 3 of 3
-Status: Ready to execute
-Last activity: 2026-06-17 -- Completed Phase 03 Plan 02 (Edits-API compositor)
+Phase: 04 (connected-frontend) — EXECUTING
+Plan: 2 of 3
+Status: Executing Phase 04
+Last activity: 2026-06-22 -- Plan 04-01 complete (step error capture, REL-01)
 
-Progress: [█████░░░░░] 50%
+Progress: [██████░░░░] 60%
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Progress: [█████░░░░░] 50%
 | Phase 01-universal-mold-schema P04 | 35 | 3 tasks | 1 files |
 | Phase 02-working-texts-step P01 | 4 | 2 tasks | 1 files |
 | Phase 03-working-images-step P02 | 12 | 3 tasks | 3 files |
+| Phase 04-connected-frontend P01 | 10 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,8 @@ Recent decisions affecting current work:
 - [Phase ?]: RED test contract для step-texts — test/step-texts.test.js покрывает TXT-01/02/03 и DEC-03 runCritic
 - [Phase 03]: step-images переписан на /v1/images/edits (фон-шаблон + фото молда через FormData), buildEditRequest экспортирован, рекурсивный retry + attemptsLog (D-10/D-11)
 - [Phase 03]: substitutePrompt использует глобальный regex (/{{token}}/g), не String.replace — повторяющиеся токены резолвятся, gate "no unresolved {{...}}" проходит
+- [Phase 04 P01]: REL-01 — шаги пишут { error, failedAt } в manifest.steps[stepId] при throw; success-path очищает в null; критик-фейл (needsReview) НЕ считается ошибкой шага
+- [Phase 04 P01]: RED-тесты инжектят throw через monkeypatch store.putArtifact — детерминированно, без сети и AI-ключей
 
 ### Pending Todos
 
@@ -102,6 +105,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-21T20:03:10.727Z
-Stopped at: Phase 4 UI-SPEC approved
-Resume file: .planning/phases/04-connected-frontend/04-UI-SPEC.md
+Last session: 2026-06-22T16:31:16.000Z
+Stopped at: Completed 04-01-PLAN.md
+Resume file: None

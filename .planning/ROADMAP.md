@@ -113,7 +113,10 @@ Plans:
   3. Шаг, завершившийся с ошибкой, отображается в UI как «упал» (не «запущен» и не «готов»)
   4. Когда шаг падает, манифест содержит поля `error` и `failedAt` — UI читает их для отображения статуса
 
-**Plans**: TBD
+**Plans**: 1 of 3 complete
+- [x] 04-01-PLAN.md — Step error capture: manifest `{ error, failedAt }` on step failure (REL-01)
+- [ ] 04-02-PLAN.md
+- [ ] 04-03-PLAN.md
 **UI hint**: yes
 
 ### Phase 5: E2E Validation
