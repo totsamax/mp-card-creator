@@ -457,7 +457,7 @@ const STATE_INDICATOR = {
   running: () => <span style={{ fontSize: 10, color: 'var(--lavender)', flexShrink: 0 }}>…</span>,
 };
 
-function StepperNav({ active, onSelect, lineId, manifests, line }) {
+function StepperNav({ active, onSelect, lineId, manifests, line, runningSteps }) {
   return (
     <div className="flex items-center gap-1 overflow-x-auto pb-1">
       {STEPS.map((step, i) => {
@@ -465,6 +465,12 @@ function StepperNav({ active, onSelect, lineId, manifests, line }) {
         const isActive  = step.key === active;
         const manifest  = manifests?.[lineId];
         const status    = computeStepStatus(step.key, manifest, line?.sizes);
+        // Optimistic running (D-02): override idle/partial with running while the flag is set
+        // (polling clears it once the manifest reaches done/error/review).
+        if (runningSteps?.[`${lineId}.${step.key}`] && (status.state === 'idle' || status.state === 'partial')) {
+          status.state = 'running';
+          status.label = undefined;
+        }
         const Indicator = STATE_INDICATOR[status.state];
         return (
           <div key={step.key} className="flex items-center">
@@ -712,6 +718,7 @@ export default function PipelineApp() {
   const [toast, setToast]           = useState(null);
   const [listError, setListError]   = useState(null);
   const [listLoading, setListLoading] = useState(true);
+  const [runningSteps, setRunningSteps] = useState({}); // `${lineId}.${stepKey}` → true (optimistic running, D-02)
 
   // Fetch lines list on mount
   useEffect(() => {
@@ -742,6 +749,38 @@ export default function PipelineApp() {
   const stepVersions = versions[activeStep] || [];
   const currentVersion = versionState[`${activeLineId}.${activeStep}`] ?? stepVersions[stepVersions.length - 1]?.v;
 
+  // Clear optimistic-running flags once the manifest shows the step reached a terminal state
+  // (done / error / review). Runs whenever the active line's manifest updates (after each poll). (D-01/D-02)
+  useEffect(() => {
+    if (!activeLineId) return;
+    const manifest = manifests[activeLineId];
+    if (!manifest) return;
+    setRunningSteps(prev => {
+      let changed = false;
+      const next = { ...prev };
+      for (const key of Object.keys(prev)) {
+        const [lineId, stepKey] = key.split('.');
+        if (lineId !== activeLineId) continue;
+        const { state } = computeStepStatus(stepKey, manifest, line?.sizes);
+        if (state === 'done' || state === 'error' || state === 'review') {
+          delete next[key];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [manifests, activeLineId, line]);
+
+  // Count steps currently flagged running for the active line — drives the polling interval. (D-01)
+  const runningCount = Object.keys(runningSteps).filter(k => k.startsWith(`${activeLineId}.`)).length;
+
+  // Poll the manifest every 5s while any step on the active line is running; stop when none are. (D-01)
+  useEffect(() => {
+    if (!activeLineId || runningCount === 0) return undefined;
+    const id = setInterval(() => refreshManifest(activeLineId), 5000);
+    return () => clearInterval(id);
+  }, [activeLineId, runningCount, refreshManifest]);
+
   const showToast = (msg) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
@@ -753,7 +792,10 @@ export default function PipelineApp() {
     try {
       await apiFetch(`/lines/${activeLineId}/steps/${stepId}/regenerate`, { method: 'POST', body: JSON.stringify({ force: true }) });
       showToast('Перегенерация запущена — обновится автоматически');
-      setTimeout(() => refreshManifest(activeLineId), 3000);
+      // Optimistic running for async steps (texts/images) — polling (effect below) confirms/clears it (D-01/D-02).
+      if (activeStep === 'texts' || activeStep === 'images') {
+        setRunningSteps(s => ({ ...s, [`${activeLineId}.${activeStep}`]: true }));
+      }
     } catch (err) {
       showToast(`Ошибка: ${err.message}`);
     }
@@ -907,14 +949,17 @@ export default function PipelineApp() {
             <QuestionnaireForm onSubmit={handleFormSubmit} loading={formLoading} />
           ) : (
             <>
-              <StepperNav active={activeStep} onSelect={setActiveStep} lineId={activeLineId} manifests={manifests} line={line} />
-              <div className="my-3">
+              <StepperNav active={activeStep} onSelect={setActiveStep} lineId={activeLineId} manifests={manifests} line={line} runningSteps={runningSteps} />
+              <div className="my-3 flex items-center gap-3 flex-wrap">
                 <VersionPicker
                   versions={stepVersions}
                   value={currentVersion}
                   onChange={(v) => setVersionState((s) => ({ ...s, [`${activeLineId}.${activeStep}`]: v }))}
                   onRegenerate={handleRegenerateStep}
                 />
+                <button className="pp-btn" onClick={() => refreshManifest(activeLineId)}>
+                  <RotateCcw size={14} aria-hidden="true" /> Обновить статус
+                </button>
               </div>
               {(() => {
                 const activeStatus = computeStepStatus(activeStep, manifests[activeLineId], line?.sizes);
