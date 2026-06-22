@@ -146,7 +146,7 @@ function VersionPicker({ versions, value, onChange, onRegenerate }) {
           onChange={(e) => onChange(Number(e.target.value))}
         >
           {versions.map((ver) => (
-            <option key={ver.v} value={ver.v}>v{ver.v} · {ver.date}</option>
+            <option key={ver.v} value={ver.v}>v{ver.v} · {ver.date} · {ver.sizeCount} разм.</option>
           ))}
         </select>
         <ChevronDown size={14} style={{ position: 'absolute', right: 8, top: 9, pointerEvents: 'none' }} aria-hidden="true" />
@@ -338,35 +338,36 @@ function ImagesView({ line, manifest, onRegenItem }) {
 }
 
 function VideoView({ line, onRegenItem }) {
-  const data = VIDEO[line.id] || {};
+  // Step-04 (video) is out of scope for Phase 4 — every size shows the not-run placeholder.
   return (
     <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
-      {line.sizes.map((s) => {
-        const v = data[s] || { ready: false };
-        return (
-          <div key={s} className="pp-card rounded-lg p-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="pp-mono text-xs px-2 py-0.5 rounded-md bg-lavender-soft text-lavender-dark">{s}</span>
-              <button className="pp-btn-ghost" onClick={() => onRegenItem(line.id, s)} aria-label={`Перегенерировать видео для ${s}`}>
-                <RotateCcw size={13} aria-hidden="true" />
-              </button>
-            </div>
-            <div className="rounded-md flex items-center justify-center mb-2" style={{ height: 80, background: v.ready ? 'var(--lavender-soft)' : 'var(--paper)', border: '1px solid var(--line)' }}>
-              {v.ready ? <Play size={20} className="text-lavender-dark" aria-hidden="true" /> : <span className="text-xs pp-muted">нет видео</span>}
-            </div>
-            <div className="text-xs pp-muted">{v.ready ? `kling.ai · ${v.duration}` : 'ожидает генерации'}</div>
+      {line.sizes.map((s) => (
+        <div key={s} className="pp-card rounded-lg p-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="pp-mono text-xs px-2 py-0.5 rounded-md bg-lavender-soft text-lavender-dark">{s}</span>
+            <button className="pp-btn-ghost" onClick={() => onRegenItem(line.id, s)} aria-label={`Перегенерировать видео для ${s}`}>
+              <RotateCcw size={13} aria-hidden="true" />
+            </button>
           </div>
-        );
-      })}
+          <div className="rounded-md flex items-center justify-center mb-2" style={{ height: 80, background: 'var(--paper)', border: '1px solid var(--line)' }}>
+            <span className="text-xs pp-muted">нет видео</span>
+          </div>
+          <div className="text-xs pp-muted">Видео: шаг не запущен</div>
+        </div>
+      ))}
     </div>
   );
 }
 
-function ExcelView({ line }) {
-  const ver = VERSIONS[line.id]?.excel?.[0];
-  if (!ver) {
-    return <div className="pp-card rounded-lg p-6 text-center text-sm pp-muted">Выгрузка ещё не сформирована</div>;
+function ExcelView({ line, manifest }) {
+  const excelMeta = manifest?.steps?.['05-excel'];
+  if (!excelMeta) {
+    return <div className="pp-card rounded-lg p-6 text-center text-sm pp-muted">Выгрузка не сформирована</div>;
   }
+  const lastEntry = (excelMeta.history || [])[(excelMeta.history || []).length - 1];
+  const date = lastEntry?.createdAt
+    ? new Date(lastEntry.createdAt).toLocaleDateString('ru', { day: '2-digit', month: 'short' })
+    : null;
   return (
     <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
       {['Ozon', 'Wildberries'].map((mp) => (
@@ -374,7 +375,7 @@ function ExcelView({ line }) {
           <div>
             <div className="text-sm font-medium mb-1">{mp}</div>
             <div className="text-xs pp-muted pp-mono">{line.id}_{mp.toLowerCase().slice(0, 4)}.xlsx</div>
-            <div className="text-xs pp-muted mt-1">{line.sizes.length} строк · {ver.date}</div>
+            <div className="text-xs pp-muted mt-1">{line.sizes.length} строк{date ? ` · ${date}` : ''}</div>
           </div>
           <button className="pp-btn" aria-label={`Скачать выгрузку для ${mp}`}>
             <Download size={14} aria-hidden="true" />
@@ -385,10 +386,26 @@ function ExcelView({ line }) {
   );
 }
 
-function AssembleView({ line }) {
+function AssembleView({ line, manifest }) {
+  const steps = manifest?.steps || {};
+  const idToLabel = Object.fromEntries(STEPS.map(s => [STEP_KEY_TO_ID[s.key], s.label]));
+  const rows = Object.entries(steps)
+    .filter(([id]) => idToLabel[id])
+    .map(([id, meta]) => ({ id, label: idToLabel[id], version: meta.currentVersion }));
+
+  if (rows.length === 0) {
+    return <div className="pp-card rounded-lg p-6 text-center text-sm pp-muted">Пакет ещё не собран — запустите шаги выше</div>;
+  }
   return (
     <div className="pp-card rounded-lg p-4">
-      <pre className="pp-mono text-xs" style={{ lineHeight: 1.7, whiteSpace: 'pre-wrap', margin: 0 }}>{ASSEMBLE_TREE[line.id]}</pre>
+      <div className="flex flex-col gap-2">
+        {rows.map((r) => (
+          <div key={r.id} className="flex items-center justify-between text-sm">
+            <span>{r.label}</span>
+            <span className="pp-mono text-xs pp-muted">{r.version ? `v${r.version}` : '—'}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -663,10 +680,18 @@ function manifestToVersions(manifest) {
   for (const [stepId, meta] of Object.entries(manifest.steps)) {
     const key = Object.entries(STEP_KEY_TO_ID).find(([, id]) => id === stepId)?.[0];
     if (!key) continue;
-    result[key] = (meta.history || []).map((h, i) => ({
+    const history = meta.history || [];
+    // Unique `size` values per version number across that step's history entries
+    const sizesByVersion = {};
+    for (const h of history) {
+      if (!h.size) continue;
+      (sizesByVersion[h.version] ||= new Set()).add(h.size);
+    }
+    result[key] = history.map((h, i) => ({
       v:    h.version,
       note: h.note || (h.needsReview ? '⚠ требует проверки' : `версия ${h.version}`),
       date: h.createdAt ? new Date(h.createdAt).toLocaleDateString('ru', { day: '2-digit', month: 'short' }) : `v${i + 1}`,
+      sizeCount: sizesByVersion[h.version]?.size ?? 0,
     }));
   }
   return result;
@@ -779,8 +804,8 @@ export default function PipelineApp() {
       case 'texts': return <TextsView line={line} manifest={manifests[activeLineId]} />;
       case 'images': return <ImagesView line={line} manifest={manifests[activeLineId]} onRegenItem={handleRegenerateItem} />;
       case 'video': return <VideoView line={line} onRegenItem={handleRegenerateItem} />;
-      case 'excel': return <ExcelView line={line} />;
-      case 'assemble': return <AssembleView line={line} />;
+      case 'excel': return <ExcelView line={line} manifest={manifests[activeLineId]} />;
+      case 'assemble': return <AssembleView line={line} manifest={manifests[activeLineId]} />;
       default: return null;
     }
   };
