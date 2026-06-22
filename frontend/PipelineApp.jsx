@@ -83,75 +83,8 @@ const STEPS = [
 
 const ALL_SIZES = ['XS', 'S', 'M', 'L', 'XL'];
 
-const LINES = [
-  { id: '0553', name: 'Василиса', theme: 'Личико ангелочка', color: 'Лавандовый', status: 'active', sizes: ['XS', 'S', 'M', 'L', 'XL'] },
-  { id: '0612', name: 'Гномик', theme: 'Бородатый гномик', color: 'Тёплый бежевый', status: 'done', sizes: ['XS', 'S', 'M', 'L', 'XL'] },
-  { id: '0588', name: 'Ёжик', theme: 'Лесной ёжик', color: 'Карамельный', status: 'draft', sizes: ['S', 'M', 'L'] },
-];
-
 const STATUS_LABEL = { active: 'В работе', done: 'Готово', draft: 'Черновик' };
 const STATUS_CLASS = { active: 'bg-lavender-soft text-lavender-dark', done: 'bg-sage-soft text-sage-dark', draft: 'bg-clay-soft text-clay-dark' };
-
-const MASTER_DATA = {
-  '0553': {
-    rows: [
-      { label: 'Размер личика, см', unit: '', values: { XS: 2, S: 3, M: 4, L: 5, XL: 6 } },
-      { label: 'Длина молда, см', unit: '', values: { XS: 3, S: 4.5, M: 6, L: 7.5, XL: 9 } },
-      { label: 'Ширина молда, см', unit: '', values: { XS: 1.25, S: 1.875, M: 2.5, L: 3.125, XL: 3.75 } },
-      { label: 'Высота молда, см', unit: '', values: { XS: 2.5, S: 3.75, M: 5, L: 6.25, XL: 7.5 } },
-      { label: 'Вес молда, г', unit: '', values: { XS: 10, S: 30, M: 60, L: 105, XL: 165 } },
-      { label: 'Вес с упаковкой, г', unit: '', values: { XS: 50, S: 70, M: 100, L: 145, XL: 205 } },
-      { label: 'Цена базовая, ₽', unit: '', values: { XS: 350, S: 650, M: 1000, L: 1400, XL: 1850 } },
-      { label: 'Цена со скидкой, ₽', unit: '', values: { XS: 260, S: 490, M: 750, L: 1050, XL: 1390 } },
-    ],
-  },
-  '0612': {
-    rows: [
-      { label: 'Размер личика, см', unit: '', values: { XS: 2, S: 3, M: 4, L: 5, XL: 6 } },
-      { label: 'Длина молда, см', unit: '', values: { XS: 2.8, S: 4.2, M: 5.6, L: 7, XL: 8.4 } },
-      { label: 'Ширина молда, см', unit: '', values: { XS: 1.4, S: 2.1, M: 2.8, L: 3.5, XL: 4.2 } },
-      { label: 'Высота молда, см', unit: '', values: { XS: 2.2, S: 3.3, M: 4.4, L: 5.5, XL: 6.6 } },
-      { label: 'Вес молда, г', unit: '', values: { XS: 12, S: 32, M: 65, L: 110, XL: 170 } },
-      { label: 'Вес с упаковкой, г', unit: '', values: { XS: 52, S: 72, M: 105, L: 150, XL: 210 } },
-      { label: 'Цена базовая, ₽', unit: '', values: { XS: 380, S: 690, M: 1050, L: 1450, XL: 1900 } },
-      { label: 'Цена со скидкой, ₽', unit: '', values: { XS: 285, S: 520, M: 790, L: 1090, XL: 1425 } },
-    ],
-  },
-  '0588': {
-    rows: [
-      { label: 'Размер личика, см', unit: '', values: { S: 3, M: 4, L: 5 } },
-      { label: 'Длина молда, см', unit: '', values: { S: 4.5, M: 6, L: 7.5 } },
-      { label: 'Ширина молда, см', unit: '', values: { S: 1.9, M: 2.5, L: 3.1 } },
-      { label: 'Высота молда, см', unit: '', values: { S: 3.8, M: 5, L: 6.3 } },
-      { label: 'Вес молда, г', unit: '', values: { S: 28, M: 58, L: 100 } },
-      { label: 'Вес с упаковкой, г', unit: '', values: { S: 68, M: 98, L: 140 } },
-      { label: 'Цена базовая, ₽', unit: '', values: { S: 600, M: 950, L: 1350 } },
-      { label: 'Цена со скидкой, ₽', unit: '', values: { S: 450, M: 710, L: 1010 } },
-    ],
-  },
-};
-
-const TEXTS = {
-  '0553': {
-    XS: { title: 'Молд «Василиса» 2см #ТопМолд', annotation: 'Авторский силиконовый молд для отливки личика ватной игрушки или куклы. Глаза без зрачков — расписывайте сами. Личико 2 см.' },
-    S: { title: 'Молд «Василиса» 3см #ТопМолд', annotation: 'Авторский силиконовый молд для отливки личика ватной игрушки или куклы. Глаза без зрачков — расписывайте сами. Личико 3 см.' },
-    M: { title: 'Молд «Василиса» 4см #ТопМолд', annotation: 'Авторский силиконовый молд для отливки личика ватной игрушки или куклы. Глаза без зрачков — расписывайте сами. Личико 4 см.' },
-    L: { title: 'Молд «Василиса» 5см #ТопМолд', annotation: 'Авторский силиконовый молд для отливки личика ватной игрушки или куклы. Глаза без зрачков — расписывайте сами. Личико 5 см.' },
-    XL: { title: 'Молд «Василиса» 6см #ТопМолд', annotation: 'Авторский силиконовый молд для отливки личика ватной игрушки или куклы. Глаза без зрачков — расписывайте сами. Личико 6 см.' },
-  },
-  '0612': {
-    XS: { title: 'Молд «Гномик» 2см #ТопМолд', annotation: 'Силиконовый молд для отливки личика гномика — борода и нос проработаны рельефом. Личико 2 см.' },
-    S: { title: 'Молд «Гномик» 3см #ТопМолд', annotation: 'Силиконовый молд для отливки личика гномика — борода и нос проработаны рельефом. Личико 3 см.' },
-    M: { title: 'Молд «Гномик» 4см #ТопМолд', annotation: 'Силиконовый молд для отливки личика гномика — борода и нос проработаны рельефом. Личико 4 см.' },
-    L: { title: 'Молд «Гномик» 5см #ТопМолд', annotation: 'Силиконовый молд для отливки личика гномика — борода и нос проработаны рельефом. Личико 5 см.' },
-    XL: { title: 'Молд «Гномик» 6см #ТопМолд', annotation: 'Силиконовый молд для отливки личика гномика — борода и нос проработаны рельефом. Личико 6 см.' },
-  },
-  '0588': {
-    S: { title: 'Молд «Ёжик» 3см #ТопМолд', annotation: 'Силиконовый молд для отливки личика ёжика — иголки переданы мелким рельефом. Личико 3 см.' },
-    M: { title: 'Молд «Ёжик» 4см #ТопМолд', annotation: 'Силиконовый молд для отливки личика ёжика — иголки переданы мелким рельефом. Личико 4 см.' },
-    L: { title: 'Молд «Ёжик» 5см #ТопМолд', annotation: 'Силиконовый молд для отливки личика ёжика — иголки переданы мелким рельефом. Личико 5 см.' },
-  },
-};
 
 const IMAGE_TYPES = [
   { key: 'main', label: 'Главное фото' },
@@ -159,74 +92,6 @@ const IMAGE_TYPES = [
   { key: 'scale', label: 'Масштаб с игрушкой' },
   { key: 'lifestyle', label: 'Лайфстайл' },
 ];
-
-const IMAGES = {
-  '0553': { XS: { main: 2, infographic: 1, scale: 1, lifestyle: 0 }, S: { main: 2, infographic: 1, scale: 1, lifestyle: 1 }, M: { main: 2, infographic: 2, scale: 1, lifestyle: 1 }, L: { main: 1, infographic: 1, scale: 1, lifestyle: 0 }, XL: { main: 1, infographic: 1, scale: 0, lifestyle: 0 } },
-  '0612': { XS: { main: 1, infographic: 1, scale: 1, lifestyle: 1 }, S: { main: 1, infographic: 1, scale: 1, lifestyle: 1 }, M: { main: 1, infographic: 1, scale: 1, lifestyle: 1 }, L: { main: 1, infographic: 1, scale: 1, lifestyle: 1 }, XL: { main: 1, infographic: 1, scale: 1, lifestyle: 1 } },
-  '0588': { S: { main: 0, infographic: 0, scale: 0, lifestyle: 0 }, M: { main: 1, infographic: 0, scale: 0, lifestyle: 0 }, L: { main: 0, infographic: 0, scale: 0, lifestyle: 0 } },
-};
-
-const VIDEO = {
-  '0553': { XS: { ready: false }, S: { ready: true, duration: '0:08' }, M: { ready: true, duration: '0:11' }, L: { ready: true, duration: '0:09' }, XL: { ready: false } },
-  '0612': { XS: { ready: true, duration: '0:10' }, S: { ready: true, duration: '0:10' }, M: { ready: true, duration: '0:12' }, L: { ready: true, duration: '0:09' }, XL: { ready: true, duration: '0:10' } },
-  '0588': { S: { ready: false }, M: { ready: false }, L: { ready: false } },
-};
-
-const VERSIONS = {
-  '0553': {
-    normalize: [{ v: 1, note: 'первичный расчёт по личику 4 см', date: '02 июн' }, { v: 2, note: 'обновлена базовая цена 1000 ₽', date: '06 июн' }],
-    texts: [{ v: 1, note: 'тексты по шаблону «Ozon-карточка»', date: '03 июн' }],
-    images: [{ v: 1, note: 'первая генерация по рендеру', date: '04 июн' }, { v: 2, note: 'перегенерирована инфографика M', date: '07 июн' }],
-    video: [{ v: 1, note: 'ролики для S, M, L', date: '08 июн' }],
-    excel: [{ v: 1, note: 'выгрузка Ozon + WB', date: '09 июн' }],
-    assemble: [{ v: 1, note: 'сборка пакета по артикулу 0553', date: '09 июн' }],
-  },
-  '0612': {
-    normalize: [{ v: 1, note: 'первичный расчёт', date: '28 мая' }],
-    texts: [{ v: 1, note: 'тексты по шаблону', date: '28 мая' }],
-    images: [{ v: 1, note: 'полный комплект изображений', date: '29 мая' }],
-    video: [{ v: 1, note: 'ролики для всех размеров', date: '30 мая' }],
-    excel: [{ v: 1, note: 'выгрузка Ozon + WB', date: '30 мая' }],
-    assemble: [{ v: 1, note: 'сборка пакета по артикулу 0612', date: '30 мая' }],
-  },
-  '0588': {
-    normalize: [{ v: 1, note: 'черновой расчёт по личику 4 см', date: '10 июн' }],
-    texts: [{ v: 1, note: 'черновые тексты, требуют правки', date: '10 июн' }],
-    images: [{ v: 1, note: 'один тестовый рендер', date: '11 июн' }],
-    video: [],
-    excel: [],
-    assemble: [],
-  },
-};
-
-const ASSEMBLE_TREE = {
-  '0553': `0553/
-├── manifest.json
-├── master-data/v2.json
-├── texts/v1/
-├── images/v2/  (+ override: M_infographic v2)
-├── video/v1/   (S, M, L)
-├── excel/v1/0553_ozon.xlsx
-├── excel/v1/0553_wb.xlsx
-└── current/ → v2, v1, v2, v1, v1`,
-  '0612': `0612/
-├── manifest.json
-├── master-data/v1.json
-├── texts/v1/
-├── images/v1/  (5 размеров × 4 типа)
-├── video/v1/   (5 размеров)
-├── excel/v1/0612_ozon.xlsx
-├── excel/v1/0612_wb.xlsx
-└── current/ → v1, v1, v1, v1, v1`,
-  '0588': `0588/
-├── manifest.json
-├── master-data/v1.json
-├── texts/v1/   (требует правки)
-├── images/v1/  (1 тестовый файл)
-├── video/      — нет данных
-├── excel/      — нет данных
-└── current/ → v1, v1, v1, —, —`,
-};
 
 function SizeLadder({ sizes, dim = 4 }) {
   const heights = { XS: 6, S: 9, M: 12, L: 15, XL: 18 };
@@ -325,11 +190,9 @@ function NormalizeView({ line, manifest }) {
           const arr = res.data?.['master-data.json'];
           if (Array.isArray(arr)) setRows(apiArrayToRows(arr));
         })
-        .catch(() => {});
+        .catch(() => { setRows(null); });
     } else {
-      // Fall back to mock for demo lines
-      const mock = MASTER_DATA[line.id];
-      setRows(mock?.rows ?? null);
+      setRows(null);
     }
   }, [line.id, manifest]);
 
@@ -390,15 +253,19 @@ function TextsView({ line, manifest }) {
           }
           setTextsData(bySize);
         })
-        .catch(() => {});
+        .catch(() => { setTextsData({}); });
     } else {
-      setTextsData(TEXTS[line.id] || {});
+      setTextsData({});
     }
   }, [line.id, manifest]);
 
-  const texts = textsData || TEXTS[line.id] || {};
+  const texts = textsData || {};
+  const hasTextsStep = Boolean(manifest?.steps?.['02-texts']);
   return (
     <div className="grid grid-cols-1 gap-3">
+      {!hasTextsStep && (
+        <p className="text-sm pp-muted">Тексты для размера ещё не сгенерированы. Нажмите «Запустить шаг».</p>
+      )}
       {line.sizes.map((s) => {
         const t = texts[s];
         return (
@@ -814,6 +681,8 @@ export default function PipelineApp() {
   const [manifests, setManifests]   = useState({});
   const [formLoading, setFormLoading] = useState(false);
   const [toast, setToast]           = useState(null);
+  const [listError, setListError]   = useState(null);
+  const [listLoading, setListLoading] = useState(true);
 
   // Fetch lines list on mount
   useEffect(() => {
@@ -822,15 +691,19 @@ export default function PipelineApp() {
         const apiLines = (data.lines || []).map(l => ({ ...l, id: l.article, name: l.moldName || l.article, theme: '', color: '', status: 'active', sizes: l.sizes || ALL_SIZES }));
         setLines(apiLines);
         setActiveLineId(apiLines[0]?.id ?? null);
+        setListLoading(false);
       })
-      .catch(() => {});
+      .catch(() => {
+        setListError('Не удалось загрузить линейки. Проверьте, что сервер запущен, и обновите страницу.');
+        setListLoading(false);
+      });
   }, []);
 
   // Fetch manifest whenever active line changes
   const refreshManifest = useCallback((lineId) => {
     apiFetch(`/lines/${lineId}/manifest`)
       .then(manifest => setManifests(m => ({ ...m, [lineId]: manifest })))
-      .catch(() => { /* keep VERSIONS mock */ });
+      .catch(() => {});
   }, []);
 
   useEffect(() => { if (activeLineId) refreshManifest(activeLineId); }, [activeLineId, refreshManifest]);
@@ -873,20 +746,26 @@ export default function PipelineApp() {
     try {
       const res = await submitQuestionnaire(questionnaire, photoFiles);
       showToast('Опросник сохранён, пайплайн запущен');
-      // Add new line to sidebar if not already there
-      if (!lines.find(l => l.id === questionnaire.article)) {
+      // Append the newly-created line to the sidebar without a page reload (UI-02 / D-10).
+      // Use the same id/name/sizes mapping shape as the mount effect so the new row matches.
+      const newLine = res.questionnaire || questionnaire;
+      const newId   = newLine.article;
+      const newSizes = Array.isArray(newLine.sizes)
+        ? newLine.sizes.map(s => (typeof s === 'string' ? s : s.size))
+        : ALL_SIZES;
+      if (!lines.find(l => l.id === newId)) {
         setLines(prev => [...prev, {
-          id: questionnaire.article,
-          name: questionnaire.moldName,
-          theme: questionnaire.theme,
-          color: questionnaire.color,
+          id: newId,
+          name: newLine.moldName || newId,
+          theme: '',
+          color: '',
           status: 'active',
-          sizes: questionnaire.sizes.map(s => s.size),
+          sizes: newSizes,
         }]);
       }
-      setActiveLineId(questionnaire.article);
+      setActiveLineId(newId);
       setActiveTab('results');
-      refreshManifest(questionnaire.article);
+      refreshManifest(newId);
     } catch (err) {
       showToast(`Ошибка запуска пайплайна: ${err.message}`);
     } finally {
@@ -913,24 +792,36 @@ export default function PipelineApp() {
 
         <aside className="pp-line border-r p-4" style={{ width: 220, flexShrink: 0 }}>
           <div className="pp-display text-sm mb-4 pp-muted" style={{ letterSpacing: '0.04em', textTransform: 'uppercase' }}>Линейки молдов</div>
+          {listError && (
+            <p className="text-sm mb-3" style={{ color: 'var(--clay-dark)', lineHeight: 1.5 }}>{listError}</p>
+          )}
           <div className="flex flex-col gap-1">
-            {lines.map((l) => (
-              <button
-                key={l.id}
-                onClick={() => { setActiveLineId(l.id); setActiveTab('results'); setActiveStep('normalize'); }}
-                className="rounded-lg p-2 text-left"
-                style={{ background: l.id === activeLineId ? 'var(--lavender-soft)' : 'transparent', border: '1px solid transparent', borderColor: l.id === activeLineId ? 'var(--lavender)' : 'transparent' }}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium">{l.name}</span>
-                  <span className="pp-mono text-xs pp-muted">{l.id}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <SizeLadder sizes={l.sizes} />
-                  <StatusBadge status={l.status} />
-                </div>
-              </button>
-            ))}
+            {listLoading ? (
+              [0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  style={{ height: 44, borderRadius: 8, border: '1px solid var(--line)', background: 'var(--paper)' }}
+                />
+              ))
+            ) : (
+              lines.map((l) => (
+                <button
+                  key={l.id}
+                  onClick={() => { setActiveLineId(l.id); setActiveTab('results'); setActiveStep('normalize'); }}
+                  className="rounded-lg p-2 text-left"
+                  style={{ background: l.id === activeLineId ? 'var(--lavender-soft)' : 'transparent', border: '1px solid transparent', borderColor: l.id === activeLineId ? 'var(--lavender)' : 'transparent' }}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium">{l.name}</span>
+                    <span className="pp-mono text-xs pp-muted">{l.id}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <SizeLadder sizes={l.sizes} />
+                    <StatusBadge status={l.status} />
+                  </div>
+                </button>
+              ))
+            )}
           </div>
           <button className="pp-btn mt-3 w-full" onClick={() => { setActiveTab('form'); }} style={{ justifyContent: 'center' }}>
             <Plus size={14} aria-hidden="true" /> Новая линейка
@@ -947,15 +838,14 @@ export default function PipelineApp() {
 
           {activeTab === 'form' && !line ? (
             <QuestionnaireForm onSubmit={handleFormSubmit} loading={formLoading} />
-          ) : !line ? (
+          ) : !listLoading && !listError && lines.length === 0 ? (
             <div className="flex flex-col items-center justify-center" style={{ minHeight: 300, gap: 12 }}>
-              <p className="pp-display text-xl pp-muted" style={{ fontWeight: 400 }}>Нет линеек</p>
-              <p className="text-sm pp-muted">Создайте первую линейку молда</p>
+              <p className="pp-display text-xl pp-muted" style={{ fontWeight: 400 }}>Линеек пока нет.</p>
               <button className="pp-btn pp-btn-primary" onClick={() => setActiveTab('form')}>
-                <Plus size={14} aria-hidden="true" /> Новая линейка
+                <Plus size={14} aria-hidden="true" /> Создайте первую →
               </button>
             </div>
-          ) : (<>
+          ) : !line ? null : (<>
 
           <div className="flex items-center justify-between mb-4">
             <div>
