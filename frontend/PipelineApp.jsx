@@ -415,6 +415,7 @@ function computeStepStatus(stepKey, manifest, lineSizes) {
   const stepId   = STEP_KEY_TO_ID[stepKey];
   const stepMeta = manifest?.steps?.[stepId];
   if (!stepMeta) return { state: 'idle' };
+  if (stepMeta.error) return { state: 'error' };   // D-03: error takes priority over partial/done/review
 
   const history = stepMeta.history || [];
 
@@ -451,6 +452,9 @@ const STATE_INDICATOR = {
   partial: ({ label }) => <span style={{ fontSize: 10, color: 'var(--clay)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{label}</span>,
   review:  ({ label }) => <span style={{ fontSize: 10, color: 'var(--clay-dark)', flexShrink: 0 }}>⚠{label ? ` ${label}` : ''}</span>,
   idle:    () => null,
+  // D-04 / UI-SPEC L132: error → clay ✘ ; running → lavender animated …
+  error:   () => <span style={{ fontSize: 10, color: 'var(--clay-dark)', flexShrink: 0 }}>✘</span>,
+  running: () => <span style={{ fontSize: 10, color: 'var(--lavender)', flexShrink: 0 }}>…</span>,
 };
 
 function StepperNav({ active, onSelect, lineId, manifests, line }) {
@@ -912,6 +916,24 @@ export default function PipelineApp() {
                   onRegenerate={handleRegenerateStep}
                 />
               </div>
+              {(() => {
+                const activeStatus = computeStepStatus(activeStep, manifests[activeLineId], line?.sizes);
+                if (activeStatus.state !== 'error') return null;
+                const errMsg = manifests[activeLineId]?.steps?.[STEP_KEY_TO_ID[activeStep]]?.error;
+                return (
+                  <div
+                    className="pp-card rounded-lg p-4 mb-3"
+                    style={{ borderColor: 'var(--clay)', background: 'var(--clay-soft)' }}
+                  >
+                    <p className="text-sm mb-3" style={{ color: 'var(--clay-dark)', lineHeight: 1.5 }}>
+                      Ошибка шага: {errMsg}
+                    </p>
+                    <button className="pp-btn pp-btn-primary" onClick={handleRegenerateStep}>
+                      <RotateCcw size={14} aria-hidden="true" /> Повторить шаг
+                    </button>
+                  </div>
+                );
+              })()}
               {renderStep()}
             </>
           )}
