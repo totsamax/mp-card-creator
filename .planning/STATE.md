@@ -10,8 +10,8 @@ progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 13
-  completed_plans: 10
-  percent: 60
+  completed_plans: 11
+  percent: 65
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-15)
 ## Current Position
 
 Phase: 04 (connected-frontend) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Executing Phase 04
-Last activity: 2026-06-22 -- Plan 04-01 complete (step error capture, REL-01)
+Last activity: 2026-06-22 -- Plan 04-02 complete (frontend mock removal, UI-01/UI-02)
 
-Progress: [██████░░░░] 60%
+Progress: [██████▌░░░] 65%
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [██████░░░░] 60%
 | Phase 02-working-texts-step P01 | 4 | 2 tasks | 1 files |
 | Phase 03-working-images-step P02 | 12 | 3 tasks | 3 files |
 | Phase 04-connected-frontend P01 | 10 | 2 tasks | 4 files |
+| Phase 04-connected-frontend P02 | 25 | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -84,6 +85,8 @@ Recent decisions affecting current work:
 - [Phase 03]: substitutePrompt использует глобальный regex (/{{token}}/g), не String.replace — повторяющиеся токены резолвятся, gate "no unresolved {{...}}" проходит
 - [Phase 04 P01]: REL-01 — шаги пишут { error, failedAt } в manifest.steps[stepId] при throw; success-path очищает в null; критик-фейл (needsReview) НЕ считается ошибкой шага
 - [Phase 04 P01]: RED-тесты инжектят throw через monkeypatch store.putArtifact — детерминированно, без сети и AI-ключей
+- [Phase 04 P02]: UI-01/UI-02 — все 7 mock-констант удалены из PipelineApp.jsx, UI читает только из API; новая линейка добавляется через setLines(prev) без reload
+- [Phase 04 P02]: VideoView всегда «Видео: шаг не запущен» (step-04 вне scope); VersionPicker label = v{N} · {date} · {N} разм. из реальной manifest history
 
 ### Pending Todos
 
@@ -93,7 +96,7 @@ None yet.
 
 - ~~step-images не запускается~~ — RESOLVED Phase 03 P02: переписан на Edits-API, suite GREEN
 - ~~enqueueRetry в step-texts/step-images молча no-ops без YMQ URL~~ — RESOLVED: enqueueRetry удалён из обоих, рекурсивный retry
-- frontend/PipelineApp.jsx строки 73–190 хардкодные константы — убираются в Phase 4
+- ~~frontend/PipelineApp.jsx строки 73–190 хардкодные константы~~ — RESOLVED Phase 04 P02: все 7 mock-констант удалены, UI API-driven
 
 ## Deferred Items
 
@@ -106,5 +109,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-06-22T16:31:16.000Z
-Stopped at: Completed 04-01-PLAN.md
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None

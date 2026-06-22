@@ -113,9 +113,9 @@ Plans:
   3. Шаг, завершившийся с ошибкой, отображается в UI как «упал» (не «запущен» и не «готов»)
   4. Когда шаг падает, манифест содержит поля `error` и `failedAt` — UI читает их для отображения статуса
 
-**Plans**: 1 of 3 complete
+**Plans**: 2 of 3 complete
 - [x] 04-01-PLAN.md — Step error capture: manifest `{ error, failedAt }` on step failure (REL-01)
-- [ ] 04-02-PLAN.md
+- [x] 04-02-PLAN.md — Frontend mock removal: all 7 mock constants deleted, API-driven views, VersionPicker history, empty/error states (UI-01, UI-02)
 - [ ] 04-03-PLAN.md
 **UI hint**: yes
 
@@ -140,5 +140,5 @@ Plans:
 | 1. Universal Mold Schema | 4/4 | Complete   | 2026-06-15 |
 | 2. Working Texts Step | 3/3 | Complete   | 2026-06-16 |
 | 3. Working Images Step | 2/3 | In Progress|  |
-| 4. Connected Frontend | 0/TBD | Not started | - |
+| 4. Connected Frontend | 2/3 | In Progress | - |
 | 5. E2E Validation | 0/TBD | Not started | - |

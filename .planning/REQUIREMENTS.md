@@ -26,8 +26,8 @@
 
 ### Frontend
 
-- [ ] **UI-01**: UI отображает реальные данные из API (хардкод LINES/TEXTS/IMAGES/VIDEO удалён)
-- [ ] **UI-02**: Новая карточка, созданная через API, появляется в списке без перезагрузки страницы
+- [x] **UI-01**: UI отображает реальные данные из API (хардкод LINES/TEXTS/IMAGES/VIDEO удалён)
+- [x] **UI-02**: Новая карточка, созданная через API, появляется в списке без перезагрузки страницы
 - [ ] **UI-03**: UI показывает статус шага: «запущен» / «упал» / «готов» (через error-поле в манифесте)
 
 ### Надёжность
@@ -75,8 +75,8 @@
 | IMG-02 | Phase 3 | Complete |
 | IMG-03 | Phase 3 | Complete |
 | IMG-04 | Phase 3 | Pending |
-| UI-01 | Phase 4 | Pending |
-| UI-02 | Phase 4 | Pending |
+| UI-01 | Phase 4 | Complete |
+| UI-02 | Phase 4 | Complete |
 | UI-03 | Phase 4 | Pending |
 | REL-01 | Phase 4 | Pending |
 | REL-02 | Phase 5 | Pending |
