@@ -67,6 +67,13 @@ async function runLocally(stepId, messages) {
         console.log(`[local] ${stepId} ok:`, JSON.stringify(msg), '→', r.statusCode);
       } catch (err) {
         console.error(`[local] ${stepId} error:`, err.message);
+        // REL-01 / D-06: record the failure to the manifest so the frontend
+        // can render an 'error' state instead of a stuck 'running'.
+        try {
+          await store.updateManifest(msg.article, stepId, { error: err.message, failedAt: new Date().toISOString() });
+        } catch (e) {
+          console.error('[local] failed to record error to manifest:', e.message);
+        }
       }
     }
   })().catch(console.error);

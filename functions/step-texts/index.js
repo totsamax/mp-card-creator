@@ -28,72 +28,77 @@ exports.handler = async (event) => {
 
   const { article, size, attempt = 1, feedback = [], force = false, attemptsLog = [] } = msg;
 
-  // Load master data for this size
-  const manifest  = await store.getManifest(article);
-  const normMeta  = manifest?.steps?.['01-normalize'];
-  if (!normMeta) return respond(400, { error: `step 01-normalize has no data for article "${article}"` });
-
-  const masterDataBuf = await store.getArtifact(article, '01-normalize', normMeta.currentVersion, 'master-data.json');
-  const masterData    = JSON.parse(masterDataBuf.toString());
-  const sizeRecord    = masterData.find(r => r.size === size);
-  if (!sizeRecord) return respond(400, { error: `Size "${size}" not found in master data` });
-
-  // Cache check (only on first attempt without force)
-  const stepMeta   = manifest?.steps?.[STEP_ID];
-  const inputHash  = sha256(JSON.stringify({ sizeRecord, promptsTmpl }));
-
-  if (attempt === 1 && !force && stepMeta) {
-    const last = stepMeta.history?.[stepMeta.history.length - 1];
-    if (last?.inputHash === inputHash && last?.needsReview === false) {
-      return respond(200, { skipped: true, article, size, stepId: STEP_ID });
-    }
-  }
-
-  // --- Generate ---
-  let generated;
+  // Top-level try/catch (REL-01 / D-06): any throw records { error, failedAt }
+  // to the manifest step entry so the frontend can render an 'error' state.
   try {
-    generated = await generateTexts(sizeRecord, feedback);
+    // Load master data for this size
+    const manifest  = await store.getManifest(article);
+    const normMeta  = manifest?.steps?.['01-normalize'];
+    if (!normMeta) return respond(400, { error: `step 01-normalize has no data for article "${article}"` });
+
+    const masterDataBuf = await store.getArtifact(article, '01-normalize', normMeta.currentVersion, 'master-data.json');
+    const masterData    = JSON.parse(masterDataBuf.toString());
+    const sizeRecord    = masterData.find(r => r.size === size);
+    if (!sizeRecord) return respond(400, { error: `Size "${size}" not found in master data` });
+
+    // Cache check (only on first attempt without force)
+    const stepMeta   = manifest?.steps?.[STEP_ID];
+    const inputHash  = sha256(JSON.stringify({ sizeRecord, promptsTmpl }));
+
+    if (attempt === 1 && !force && stepMeta) {
+      const last = stepMeta.history?.[stepMeta.history.length - 1];
+      if (last?.inputHash === inputHash && last?.needsReview === false) {
+        return respond(200, { skipped: true, article, size, stepId: STEP_ID });
+      }
+    }
+
+    // --- Generate ---
+    const generated = await generateTexts(sizeRecord, feedback);
+
+    // --- Critic (rule-based) ---
+    const criticVerdict = runCritic(generated, sizeRecord.topic);
+
+    if (criticVerdict.ok || attempt >= MAX_ATTEMPTS) {
+      // Save result
+      const nextVersion  = (stepMeta?.currentVersion ?? 0) + 1;
+      const needsReview  = !criticVerdict.ok; // exhausted attempts
+
+      const payload = { size, texts: generated, needsReview, criticVerdict };
+      await store.putArtifact(
+        article, STEP_ID, nextVersion,
+        `${size}_texts.json`,
+        Buffer.from(JSON.stringify(payload, null, 2))
+      );
+
+      const historyEntry = {
+        version: nextVersion,
+        size,
+        createdAt: new Date().toISOString(),
+        inputHash,
+        needsReview,
+        attempts: [...attemptsLog, { attempt, criticVerdict }],
+      };
+
+      // error/failedAt cleared on success so a retry resolves a prior failure.
+      await store.updateManifest(article, STEP_ID, {
+        currentVersion: nextVersion,
+        history: [...(stepMeta?.history ?? []), historyEntry],
+        error: null,
+        failedAt: null,
+      });
+
+      return respond(200, { article, size, stepId: STEP_ID, version: nextVersion, needsReview, texts: generated });
+    }
+
+    // Critic rejected — recurse directly (local retry, no YMQ)
+    return exports.handler({ body: JSON.stringify({
+      article, size, attempt: attempt + 1, feedback: criticVerdict.issues, force,
+      attemptsLog: [...attemptsLog, { attempt, criticVerdict }],
+    }) });
   } catch (err) {
-    return respond(500, { error: `LLM call failed: ${err.message}` });
+    await store.updateManifest(article, STEP_ID, { error: err.message, failedAt: new Date().toISOString() });
+    return respond(500, { error: err.message });
   }
-
-  // --- Critic (rule-based) ---
-  const criticVerdict = runCritic(generated, sizeRecord.topic);
-
-  if (criticVerdict.ok || attempt >= MAX_ATTEMPTS) {
-    // Save result
-    const nextVersion  = (stepMeta?.currentVersion ?? 0) + 1;
-    const needsReview  = !criticVerdict.ok; // exhausted attempts
-
-    const payload = { size, texts: generated, needsReview, criticVerdict };
-    await store.putArtifact(
-      article, STEP_ID, nextVersion,
-      `${size}_texts.json`,
-      Buffer.from(JSON.stringify(payload, null, 2))
-    );
-
-    const historyEntry = {
-      version: nextVersion,
-      size,
-      createdAt: new Date().toISOString(),
-      inputHash,
-      needsReview,
-      attempts: [...attemptsLog, { attempt, criticVerdict }],
-    };
-
-    await store.updateManifest(article, STEP_ID, {
-      currentVersion: nextVersion,
-      history: [...(stepMeta?.history ?? []), historyEntry],
-    });
-
-    return respond(200, { article, size, stepId: STEP_ID, version: nextVersion, needsReview, texts: generated });
-  }
-
-  // Critic rejected — recurse directly (local retry, no YMQ)
-  return exports.handler({ body: JSON.stringify({
-    article, size, attempt: attempt + 1, feedback: criticVerdict.issues, force,
-    attemptsLog: [...attemptsLog, { attempt, criticVerdict }],
-  }) });
 };
 
 // ---------------------------------------------------------------------------

@@ -28,94 +28,106 @@ exports.handler = async (event) => {
   const { article, size, imageType, attempt = 1, feedback = [], force = false, attemptsLog = [] } = msg;
   if (!imageType) return respond(400, { error: 'imageType is required' });
 
-  // Load master data
-  const manifest   = await store.getManifest(article);
-  const normMeta   = manifest?.steps?.['01-normalize'];
-  if (!normMeta) return respond(400, { error: `step 01-normalize has no data for article "${article}"` });
-
-  const masterDataBuf = await store.getArtifact(article, '01-normalize', normMeta.currentVersion, 'master-data.json');
-  const masterData    = JSON.parse(masterDataBuf.toString());
-  const sizeRecord    = masterData.find(r => r.size === size);
-  if (!sizeRecord) return respond(400, { error: `Size "${size}" not found in master data` });
-
-  // No mold photo → 400 (D-03). Checked at the handler level so a missing photo
-  // always yields 400 regardless of API key / stub path.
-  const photoNames = await store.listArtifacts(article, 'photos', 1);
-  if (!photoNames || photoNames.length === 0) return respond(400, { error: 'no mold photo found' });
-
-  const stepMeta  = manifest?.steps?.[STEP_ID];
-  const inputHash = sha256(JSON.stringify({ sizeRecord, imageType, promptsTmpl }));
-
-  // Cache check
-  if (attempt === 1 && !force && stepMeta) {
-    const last = stepMeta.history?.slice(-1)[0];
-    if (last?.inputHash === inputHash && !last?.needsReview) {
-      return respond(200, { skipped: true, article, size, imageType, stepId: STEP_ID });
-    }
-  }
-
-  // --- Generate image ---
-  console.log(`[step-images] generating ${article} ${size}/${imageType} attempt=${attempt}`);
-  let imageBuffer;
-  let generationStub = false;
+  // Top-level try/catch (REL-01 / D-06): any throw records { error, failedAt }
+  // to the manifest step entry so the frontend can render an 'error' state.
   try {
-    const result = await generateImage(article, sizeRecord, imageType, feedback);
-    if (result && result.stub) {
-      imageBuffer = result.buffer;
-      generationStub = true;
-    } else {
-      imageBuffer = result;
+    // Load master data
+    const manifest   = await store.getManifest(article);
+    const normMeta   = manifest?.steps?.['01-normalize'];
+    if (!normMeta) return respond(400, { error: `step 01-normalize has no data for article "${article}"` });
+
+    const masterDataBuf = await store.getArtifact(article, '01-normalize', normMeta.currentVersion, 'master-data.json');
+    const masterData    = JSON.parse(masterDataBuf.toString());
+    const sizeRecord    = masterData.find(r => r.size === size);
+    if (!sizeRecord) return respond(400, { error: `Size "${size}" not found in master data` });
+
+    // No mold photo → 400 (D-03). Checked at the handler level so a missing photo
+    // always yields 400 regardless of API key / stub path.
+    const photoNames = await store.listArtifacts(article, 'photos', 1);
+    if (!photoNames || photoNames.length === 0) return respond(400, { error: 'no mold photo found' });
+
+    const stepMeta  = manifest?.steps?.[STEP_ID];
+    const inputHash = sha256(JSON.stringify({ sizeRecord, imageType, promptsTmpl }));
+
+    // Cache check
+    if (attempt === 1 && !force && stepMeta) {
+      const last = stepMeta.history?.slice(-1)[0];
+      if (last?.inputHash === inputHash && !last?.needsReview) {
+        return respond(200, { skipped: true, article, size, imageType, stepId: STEP_ID });
+      }
     }
+
+    // --- Generate image ---
+    console.log(`[step-images] generating ${article} ${size}/${imageType} attempt=${attempt}`);
+    let imageBuffer;
+    let generationStub = false;
+    try {
+      const result = await generateImage(article, sizeRecord, imageType, feedback);
+      if (result && result.stub) {
+        imageBuffer = result.buffer;
+        generationStub = true;
+      } else {
+        imageBuffer = result;
+      }
+    } catch (err) {
+      console.error(`[step-images] generation failed ${size}/${imageType}:`, err.message);
+      await store.updateManifest(article, STEP_ID, { error: err.message, failedAt: new Date().toISOString() });
+      return respond(500, { error: `Image generation failed: ${err.message}` });
+    }
+
+    // --- Critic (Claude Vision or stub) ---
+    let criticVerdict;
+    try {
+      criticVerdict = await runCritic(imageBuffer, sizeRecord, imageType);
+    } catch (err) {
+      // If critic call fails, treat as ok to not block the pipeline.
+      // This is NOT a step error — do NOT write { error, failedAt } here.
+      console.warn('[step-images] critic failed, accepting image:', err.message);
+      criticVerdict = { ok: true, issues: [] };
+    }
+
+    if (criticVerdict.ok || attempt >= MAX_ATTEMPTS) {
+      const nextVersion  = (stepMeta?.currentVersion ?? 0) + 1;
+      const needsReview  = !criticVerdict.ok || generationStub;
+      const artifactName = `${size}_${imageType}.png`;
+
+      await store.putArtifact(article, STEP_ID, nextVersion, artifactName, imageBuffer);
+
+      const historyEntry = {
+        version: nextVersion,
+        size,
+        imageType,
+        createdAt: new Date().toISOString(),
+        inputHash,
+        needsReview,
+        attempts: [...attemptsLog, { attempt, criticVerdict }],
+      };
+
+      // error/failedAt cleared on success so a retry resolves a prior failure.
+      await store.updateManifest(article, STEP_ID, {
+        currentVersion: nextVersion,
+        history: [...(stepMeta?.history ?? []), historyEntry],
+        error: null,
+        failedAt: null,
+        ...(needsReview ? { overrides: { [artifactName]: `v${nextVersion}` } } : {}),
+      });
+
+      console.log(`[step-images] saved ${article} ${size}/${imageType} → v${nextVersion}${needsReview ? ' ⚠ needsReview' : ' ✓'}`);
+      return respond(200, {
+        article, size, imageType, stepId: STEP_ID,
+        version: nextVersion, needsReview, artifactName,
+      });
+    }
+
+    // Critic rejected — recurse directly (local retry, no YMQ)
+    return exports.handler({ body: JSON.stringify({
+      article, size, imageType, attempt: attempt + 1, feedback: criticVerdict.issues, force,
+      attemptsLog: [...attemptsLog, { attempt, criticVerdict }],
+    }) });
   } catch (err) {
-    console.error(`[step-images] generation failed ${size}/${imageType}:`, err.message);
-    return respond(500, { error: `Image generation failed: ${err.message}` });
+    await store.updateManifest(article, STEP_ID, { error: err.message, failedAt: new Date().toISOString() });
+    return respond(500, { error: err.message });
   }
-
-  // --- Critic (Claude Vision or stub) ---
-  let criticVerdict;
-  try {
-    criticVerdict = await runCritic(imageBuffer, sizeRecord, imageType);
-  } catch (err) {
-    // If critic call fails, treat as ok to not block the pipeline
-    console.warn('[step-images] critic failed, accepting image:', err.message);
-    criticVerdict = { ok: true, issues: [] };
-  }
-
-  if (criticVerdict.ok || attempt >= MAX_ATTEMPTS) {
-    const nextVersion  = (stepMeta?.currentVersion ?? 0) + 1;
-    const needsReview  = !criticVerdict.ok || generationStub;
-    const artifactName = `${size}_${imageType}.png`;
-
-    await store.putArtifact(article, STEP_ID, nextVersion, artifactName, imageBuffer);
-
-    const historyEntry = {
-      version: nextVersion,
-      size,
-      imageType,
-      createdAt: new Date().toISOString(),
-      inputHash,
-      needsReview,
-      attempts: [...attemptsLog, { attempt, criticVerdict }],
-    };
-
-    await store.updateManifest(article, STEP_ID, {
-      currentVersion: nextVersion,
-      history: [...(stepMeta?.history ?? []), historyEntry],
-      ...(needsReview ? { overrides: { [artifactName]: `v${nextVersion}` } } : {}),
-    });
-
-    console.log(`[step-images] saved ${article} ${size}/${imageType} → v${nextVersion}${needsReview ? ' ⚠ needsReview' : ' ✓'}`);
-    return respond(200, {
-      article, size, imageType, stepId: STEP_ID,
-      version: nextVersion, needsReview, artifactName,
-    });
-  }
-
-  // Critic rejected — recurse directly (local retry, no YMQ)
-  return exports.handler({ body: JSON.stringify({
-    article, size, imageType, attempt: attempt + 1, feedback: criticVerdict.issues, force,
-    attemptsLog: [...attemptsLog, { attempt, criticVerdict }],
-  }) });
 };
 
 // ---------------------------------------------------------------------------
