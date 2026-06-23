@@ -131,7 +131,11 @@ Plans:
   2. После завершения шага 06-assemble в output/ находится полный пакет: master-data.json, тексты, слайды, ozon.xlsx, wb.xlsx
   3. Ни один шаг не падает и не остаётся в статусе «запущен» бесконечно — каждый шаг завершается со статусом «готов» или «упал» в манифесте
 
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+**Wave 1**
+
+- [ ] 05-01-PLAN.md — E2E-оркестратор test/e2e.test.js: spawn local-server, multipart POST /lines (face-молд + фото), запуск 01→06, poll по artifact-count, валидация артефактов (master-data/тексты/PNG/xlsx/assemble-report), skip-guard RUN_E2E (REL-02)
 
 ## Progress
 
@@ -141,4 +145,4 @@ Plans:
 | 2. Working Texts Step | 3/3 | Complete   | 2026-06-16 |
 | 3. Working Images Step | 3/3 | Complete   | 2026-06-22 |
 | 4. Connected Frontend | 3/3 | Complete   | 2026-06-22 |
-| 5. E2E Validation | 0/TBD | Not started | - |
+| 5. E2E Validation | 0/1 | Not started | - |
