@@ -1,0 +1,17 @@
+{
+  "moldType": "face",
+  "moldName": "Василиса",
+  "brand": "ТопМолд",
+  "theme": "Кукольное лицо",
+  "color": "Телесный",
+  "priceBaseM": 1200,
+  "sizes": [
+    { "size": "XS", "moldSize": 50,  "moldLength": 5.0,  "moldWidth": 4.0, "moldHeight": 1.5, "moldWeight": 80 },
+    { "size": "S",  "moldSize": 65,  "moldLength": 6.5,  "moldWidth": 5.2, "moldHeight": 1.8, "moldWeight": 110 },
+    { "size": "M",  "moldSize": 80,  "moldLength": 8.0,  "moldWidth": 6.3, "moldHeight": 2.0, "moldWeight": 145 },
+    { "size": "L",  "moldSize": 95,  "moldLength": 9.5,  "moldWidth": 7.4, "moldHeight": 2.2, "moldWeight": 185 },
+    { "size": "XL", "moldSize": 110, "moldLength": 11.0, "moldWidth": 8.5, "moldHeight": 2.5, "moldWeight": 230 }
+  ],
+  "photos": [],
+  "artifacts": ["images", "excel-ozon", "excel-wb"]
+}

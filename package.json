@@ -6,7 +6,8 @@
   "scripts": {
     "api": "node infra/local-server.js",
     "dev": "concurrently \"npm run api\" \"npm run --prefix frontend dev\"",
-    "test": "node --test 'test/**/*.test.js'"
+    "test": "node --test 'test/**/*.test.js'",
+    "test:e2e": "node --test test/e2e.test.js"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
