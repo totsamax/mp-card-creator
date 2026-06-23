@@ -10,7 +10,7 @@ The pipeline skeleton is built but has never run end-to-end. Five phases close t
 - [x] **Phase 2: Working Texts Step** - Тексты генерируются для реального типа молда, critic loop работает локально (completed 2026-06-16)
 - [x] **Phase 3: Working Images Step** - Шаг 03-images запускается, слайды генерируются, сохраняются и видны в UI (completed 2026-06-22)
 - [x] **Phase 4: Connected Frontend** - UI показывает реальные данные из API, статусы шагов, ошибки (completed 2026-06-22)
-- [ ] **Phase 5: E2E Validation** - Полный прогон pipeline конец-в-конец без ручного вмешательства
+- [x] **Phase 5: E2E Validation** - Полный прогон pipeline конец-в-конец без ручного вмешательства (completed 2026-06-23)
 
 ## Phase Details
 
@@ -114,9 +114,11 @@ Plans:
   4. Когда шаг падает, манифест содержит поля `error` и `failedAt` — UI читает их для отображения статуса
 
 **Plans**: 3 of 3 complete
+
 - [x] 04-01-PLAN.md — Step error capture: manifest `{ error, failedAt }` on step failure (REL-01)
 - [x] 04-02-PLAN.md — Frontend mock removal: all 7 mock constants deleted, API-driven views, VersionPicker history, empty/error states (UI-01, UI-02)
 - [x] 04-03-PLAN.md — Error/Polling UI: error step state (clay ✘), failed-step view + retry, optimistic running on 202, 5s polling, manual refresh button (UI-03, REL-01)
+
 **UI hint**: yes
 
 ### Phase 5: E2E Validation
@@ -135,7 +137,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 05-01-PLAN.md — E2E-оркестратор test/e2e.test.js: spawn local-server, multipart POST /lines (face-молд + фото), запуск 01→06, poll по artifact-count, валидация артефактов (master-data/тексты/PNG/xlsx/assemble-report), skip-guard RUN_E2E (REL-02)
+- [x] 05-01-PLAN.md — E2E-оркестратор test/e2e.test.js: spawn local-server, multipart POST /lines (face-молд + фото), запуск 01→06, poll по artifact-count, валидация артефактов (master-data/тексты/PNG/xlsx/assemble-report), skip-guard RUN_E2E (REL-02)
 
 ## Progress
 
@@ -145,4 +147,4 @@ Plans:
 | 2. Working Texts Step | 3/3 | Complete   | 2026-06-16 |
 | 3. Working Images Step | 3/3 | Complete   | 2026-06-22 |
 | 4. Connected Frontend | 3/3 | Complete   | 2026-06-22 |
-| 5. E2E Validation | 0/1 | Not started | - |
+| 5. E2E Validation | 1/1 | Complete   | 2026-06-23 |
