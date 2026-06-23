@@ -26,7 +26,7 @@ exports.handler = async (event) => {
   const msg = parseMessage(event);
   if (!msg) return respond(400, { error: 'Invalid message' });
 
-  const { article, size, attempt = 1, feedback = [], force = false, attemptsLog = [] } = msg;
+  const { article, size, attempt = 1, feedback = [], force = false, attemptsLog = [], runVersion } = msg;
 
   // Top-level try/catch (REL-01 / D-06): any throw records { error, failedAt }
   // to the manifest step entry so the frontend can render an 'error' state.
@@ -59,8 +59,12 @@ exports.handler = async (event) => {
     const criticVerdict = runCritic(generated, sizeRecord.topic);
 
     if (criticVerdict.ok || attempt >= MAX_ATTEMPTS) {
-      // Save result
-      const nextVersion  = (stepMeta?.currentVersion ?? 0) + 1;
+      // Save result.
+      // runVersion (set by api/handleRegenerate) pins ONE version for the whole
+      // 5-size run so every size writes into the same v{N} folder and all sizes
+      // stay visible via handleGetStep. Fall back to per-call increment only when
+      // a message arrives without a pinned version (e.g. a direct/legacy call).
+      const nextVersion  = runVersion ?? (stepMeta?.currentVersion ?? 0) + 1;
       const needsReview  = !criticVerdict.ok; // exhausted attempts
 
       const payload = { size, texts: generated, needsReview, criticVerdict };
@@ -90,9 +94,10 @@ exports.handler = async (event) => {
       return respond(200, { article, size, stepId: STEP_ID, version: nextVersion, needsReview, texts: generated });
     }
 
-    // Critic rejected — recurse directly (local retry, no YMQ)
+    // Critic rejected — recurse directly (local retry, no YMQ).
+    // Carry runVersion forward so retries write into the same pinned run version.
     return exports.handler({ body: JSON.stringify({
-      article, size, attempt: attempt + 1, feedback: criticVerdict.issues, force,
+      article, size, attempt: attempt + 1, feedback: criticVerdict.issues, force, runVersion,
       attemptsLog: [...attemptsLog, { attempt, criticVerdict }],
     }) });
   } catch (err) {

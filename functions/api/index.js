@@ -372,7 +372,15 @@ async function handleRegenerate(article, stepId, event, item) {
     let messages;
     if (stepId === '02-texts') {
       const sizes = item ? [item] : SIZES;
-      messages = sizes.map(size => ({ article, size, attempt: 1, force }));
+      // Pin ONE version for the whole run so every size writes its artifact into
+      // the same v{N} folder. Without this, each size increments the version
+      // independently (read-merge-write per message) and ends up in its own
+      // version dir — handleGetStep then lists only currentVersion (the last
+      // size, XL) and the other sizes appear to "disappear".
+      const manifest  = await store.getManifest(article);
+      const stepMeta  = manifest?.steps?.[stepId];
+      const runVersion = (stepMeta?.currentVersion ?? 0) + 1;
+      messages = sizes.map(size => ({ article, size, attempt: 1, force, runVersion }));
     } else if (stepId === '03-images') {
       if (item) {
         const [size, imageType] = item.split('_');
