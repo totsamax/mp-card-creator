@@ -1,0 +1,12 @@
+name = "mp-card-ai-proxy"
+main = "index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+routes = [
+  { pattern = "proxy.topmold.ru/*", zone_name = "topmold.ru" }
+]
+
+# Secrets (add via: wrangler secret put OPENAI_API_KEY)
+# OPENAI_API_KEY
+# ANTHROPIC_API_KEY
