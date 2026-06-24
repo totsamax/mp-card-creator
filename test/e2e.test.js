@@ -29,6 +29,18 @@ const ExcelJS = require('exceljs');
 if (!process.env.RUN_E2E) {
   test('e2e (skipped — set RUN_E2E=1 to run)', { skip: true }, () => {});
 } else {
+  // Load .env.local from project root (same pattern as infra/local-server.js)
+  // Does NOT override already-set env vars — safe to run with explicit exports.
+  try {
+    const envPath = path.resolve(__dirname, '../.env.local');
+    fs.readFileSync(envPath, 'utf8').split('\n').forEach(line => {
+      const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+      if (m && process.env[m[1]] === undefined) {
+        process.env[m[1]] = m[2].trim().replace(/^['"]|['"]$/g, '');
+      }
+    });
+  } catch { /* .env.local not present — ok */ }
+
   // -------------------------------------------------------------------------
   // Constants
   // -------------------------------------------------------------------------

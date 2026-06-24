@@ -386,8 +386,13 @@ async function handleRegenerate(article, stepId, event, item) {
         const [size, imageType] = item.split('_');
         messages = [{ article, size, imageType, attempt: 1, force }];
       } else {
+        // Pin ONE version for the whole run (same fix as 02-texts) so every size+type
+        // writes its artifact into the same v{N} folder.
+        const manifest3  = await store.getManifest(article);
+        const stepMeta3  = manifest3?.steps?.[stepId];
+        const runVersion = (stepMeta3?.currentVersion ?? 0) + 1;
         messages = SIZES.flatMap(size =>
-          IMAGE_TYPES.map(imageType => ({ article, size, imageType, attempt: 1, force }))
+          IMAGE_TYPES.map(imageType => ({ article, size, imageType, attempt: 1, force, runVersion }))
         );
       }
     } else if (stepId === '04-video') {

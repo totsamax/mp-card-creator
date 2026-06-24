@@ -25,7 +25,7 @@ exports.handler = async (event) => {
   const msg = parseMessage(event);
   if (!msg) return respond(400, { error: 'Invalid message' });
 
-  const { article, size, imageType, attempt = 1, feedback = [], force = false, attemptsLog = [] } = msg;
+  const { article, size, imageType, attempt = 1, feedback = [], force = false, attemptsLog = [], runVersion } = msg;
   if (!imageType) return respond(400, { error: 'imageType is required' });
 
   // Top-level try/catch (REL-01 / D-06): any throw records { error, failedAt }
@@ -87,7 +87,7 @@ exports.handler = async (event) => {
     }
 
     if (criticVerdict.ok || attempt >= MAX_ATTEMPTS) {
-      const nextVersion  = (stepMeta?.currentVersion ?? 0) + 1;
+      const nextVersion  = runVersion ?? (stepMeta?.currentVersion ?? 0) + 1;
       const needsReview  = !criticVerdict.ok || generationStub;
       const artifactName = `${size}_${imageType}.png`;
 
@@ -121,7 +121,7 @@ exports.handler = async (event) => {
 
     // Critic rejected — recurse directly (local retry, no YMQ)
     return exports.handler({ body: JSON.stringify({
-      article, size, imageType, attempt: attempt + 1, feedback: criticVerdict.issues, force,
+      article, size, imageType, attempt: attempt + 1, feedback: criticVerdict.issues, force, runVersion,
       attemptsLog: [...attemptsLog, { attempt, criticVerdict }],
     }) });
   } catch (err) {
