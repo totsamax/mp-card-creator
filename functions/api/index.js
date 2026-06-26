@@ -9,7 +9,7 @@ const template = require(path.join(SHARED, 'config/template.master.json'));
 const { computeMasterData } = require(path.join(SHARED, 'templateEngine'));
 
 const SIZES       = ['XS', 'S', 'M', 'L', 'XL'];
-const IMAGE_TYPES = ['infographic'];
+const IMAGE_TYPES = ['main', 'infographic', 'scale', 'lifestyle'];
 const VIDEO_TYPES = ['turntable', 'detail', 'lifestyle'];
 
 const STEP_QUEUES = {
@@ -61,11 +61,16 @@ async function runLocally(stepId, messages) {
   }[stepId];
   const { handler } = requireStep(stepName);
   (async () => {
-    for (const msg of messages) {
-      try {
-        const r = await handler({ body: JSON.stringify(msg) });
-        console.log(`[local] ${stepId} ok:`, JSON.stringify(msg), '→', r.statusCode);
-      } catch (err) {
+    const results = await Promise.allSettled(
+      messages.map(msg => handler({ body: JSON.stringify(msg) })
+        .then(r => { console.log(`[local] ${stepId} ok:`, JSON.stringify(msg), '→', r.statusCode); return r; })
+      )
+    );
+    for (let i = 0; i < results.length; i++) {
+      const res = results[i];
+      const msg = messages[i];
+      if (res.status === 'rejected') {
+        const err = res.reason;
         console.error(`[local] ${stepId} error:`, err.message);
         // REL-01 / D-06: record the failure to the manifest so the frontend
         // can render an 'error' state instead of a stuck 'running'.
@@ -188,12 +193,53 @@ async function handleListLines() {
   return respond(200, { lines: lines.filter(Boolean) });
 }
 
+// Parse multipart/form-data from a raw event body (for cloud YC Functions runtime).
+// In local-server.js the parsing is done before the handler, so event.files is already set.
+// In cloud, the API Gateway passes the raw body and we parse it here.
+async function parseMultipartEvent(event) {
+  const ct = Object.entries(event.headers || {}).find(([k]) => k.toLowerCase() === 'content-type')?.[1] || '';
+  if (!ct.startsWith('multipart/form-data')) return;
+
+  const Busboy = require('busboy');
+  const { Readable } = require('stream');
+
+  const rawBody = event.isBase64Encoded
+    ? Buffer.from(event.body, 'base64')
+    : Buffer.from(event.body || '');
+
+  return new Promise((resolve, reject) => {
+    const bb = Busboy({ headers: { 'content-type': ct }, limits: { fileSize: 15 * 1024 * 1024, files: 10 } });
+    const formFields = {};
+    const files = [];
+
+    bb.on('field', (name, val) => { formFields[name] = val; });
+    bb.on('file', (fieldname, stream, { filename, mimeType }) => {
+      const chunks = [];
+      stream.on('data', chunk => chunks.push(chunk));
+      stream.on('end', () => files.push({ filename: filename || fieldname, mimeType, buffer: Buffer.concat(chunks) }));
+    });
+    bb.on('finish', () => resolve({ formFields, files }));
+    bb.on('error', reject);
+
+    Readable.from([rawBody]).pipe(bb);
+  });
+}
+
 async function handleCreateLine(event) {
   let questionnaire;
   let force = false;
 
+  // Cloud path: parse multipart from raw body when local-server.js hasn't done it
+  if (!event.files) {
+    const parsed = await parseMultipartEvent(event).catch(() => null);
+    if (parsed) {
+      event.files = parsed.files;
+      event.formFields = parsed.formFields;
+    }
+  }
+
   if (event.files && event.files.length > 0) {
-    // Multipart path: files uploaded via busboy (local-server.js or equivalent adapter)
+    // Multipart path: files uploaded via busboy (local-server.js or cloud parseMultipartEvent)
     try {
       questionnaire = JSON.parse(event.formFields && event.formFields.questionnaire ? event.formFields.questionnaire : '{}');
     } catch {
@@ -328,9 +374,10 @@ async function handleGetArtifact(article, stepId, name, query) {
       // History entries have { size, imageType?, version }
       const history = stepMeta.history || [];
       const match = [...history].reverse().find(h => {
-        const expected = h.imageType
-          ? `${h.size}_${h.imageType}.png`
-          : `${h.size}_texts.json`;
+        let expected;
+        if (h.imageType)  expected = `${h.size}_${h.imageType}.png`;
+        else if (h.videoType) expected = `${h.size}_${h.videoType}.mp4`;
+        else               expected = `${h.size}_texts.json`;
         return expected === name;
       });
       effectiveVersion = match?.version ?? stepMeta.currentVersion;
@@ -345,10 +392,13 @@ async function handleGetArtifact(article, stepId, name, query) {
   }
 
   const ext = name.split('.').pop().toLowerCase();
-  const contentTypes = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', json: 'application/json' };
+  const contentTypes = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', mp4: 'video/mp4', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', json: 'application/json' };
+  // Detect WebP magic bytes (RIFF....WEBP) even when file is saved as .png
+  const isWebP = buffer.length >= 12 && buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 && buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50;
+  const contentType = isWebP ? 'image/webp' : (contentTypes[ext] || 'application/octet-stream');
   return {
     statusCode: 200,
-    headers: { 'Content-Type': contentTypes[ext] || 'application/octet-stream', 'Cache-Control': 'max-age=60' },
+    headers: { 'Content-Type': contentType, 'Cache-Control': 'max-age=60' },
     body: buffer.toString('base64'),
     isBase64Encoded: true,
   };
@@ -382,14 +432,16 @@ async function handleRegenerate(article, stepId, event, item) {
       const runVersion = (stepMeta?.currentVersion ?? 0) + 1;
       messages = sizes.map(size => ({ article, size, attempt: 1, force, runVersion }));
     } else if (stepId === '03-images') {
+      const manifest3  = await store.getManifest(article);
+      const stepMeta3  = manifest3?.steps?.[stepId];
       if (item) {
         const [size, imageType] = item.split('_');
-        messages = [{ article, size, imageType, attempt: 1, force }];
+        // Use current version so the artifact lands in the existing version directory
+        const runVersion = stepMeta3?.currentVersion ?? 1;
+        messages = [{ article, size, imageType, attempt: 1, force, runVersion }];
       } else {
         // Pin ONE version for the whole run (same fix as 02-texts) so every size+type
         // writes its artifact into the same v{N} folder.
-        const manifest3  = await store.getManifest(article);
-        const stepMeta3  = manifest3?.steps?.[stepId];
         const runVersion = (stepMeta3?.currentVersion ?? 0) + 1;
         messages = SIZES.flatMap(size =>
           IMAGE_TYPES.map(imageType => ({ article, size, imageType, attempt: 1, force, runVersion }))

@@ -81,6 +81,32 @@ paths:
         '404':
           description: Article or step not found
 
+  /lines/{id}/steps/{step}/artifacts/{name}:
+    get:
+      operationId: getArtifact
+      summary: Get artifact binary (image, xlsx, json)
+      parameters:
+        - $ref: '#/components/parameters/lineId'
+        - $ref: '#/components/parameters/stepId'
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: ${API_FUNCTION_ID}
+        tag: $latest
+      responses:
+        '200':
+          description: Artifact binary
+
   /lines/{id}/steps/{step}/regenerate:
     post:
       operationId: regenerateStep
@@ -151,13 +177,6 @@ components:
       required: true
       schema:
         type: string
-        enum:
-          - 01-normalize
-          - 02-texts
-          - 03-images
-          - 04-video
-          - 05-excel
-          - 06-assemble
 
   schemas:
     Questionnaire:

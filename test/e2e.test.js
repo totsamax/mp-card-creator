@@ -33,7 +33,7 @@ if (!process.env.RUN_E2E) {
   // Does NOT override already-set env vars — safe to run with explicit exports.
   try {
     const envPath = path.resolve(__dirname, '../.env.local');
-    fs.readFileSync(envPath, 'utf8').split('\n').forEach(line => {
+    fs.readFileSync(envPath, 'utf8').split(/\r?\n/).forEach(line => {
       const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
       if (m && process.env[m[1]] === undefined) {
         process.env[m[1]] = m[2].trim().replace(/^['"]|['"]$/g, '');

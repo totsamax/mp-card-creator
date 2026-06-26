@@ -93,6 +93,12 @@ const IMAGE_TYPES = [
   { key: 'lifestyle', label: 'Лайфстайл' },
 ];
 
+const VIDEO_TYPES = [
+  { key: 'turntable', label: '360° вращение' },
+  { key: 'detail',    label: 'Детали' },
+  { key: 'lifestyle', label: 'Лайфстайл' },
+];
+
 function SizeLadder({ sizes, dim = 4 }) {
   const heights = { XS: 6, S: 9, M: 12, L: 15, XL: 18 };
   return (
@@ -299,7 +305,7 @@ function ImagesView({ line, manifest, onRegenItem }) {
   const imgUrl = (size, imageType) => {
     const h = done[`${size}_${imageType}`];
     if (!h) return null;
-    return `/lines/${line.id}/steps/03-images/artifacts/${size}_${imageType}.png?version=${h.version}`;
+    return `${API_BASE}/lines/${line.id}/steps/03-images/artifacts/${size}_${imageType}.png?version=${h.version}`;
   };
 
   return (
@@ -337,24 +343,54 @@ function ImagesView({ line, manifest, onRegenItem }) {
   );
 }
 
-function VideoView({ line, onRegenItem }) {
-  // Step-04 (video) is out of scope for Phase 4 — every size shows the not-run placeholder.
+function VideoView({ line, manifest, onRegenItem }) {
+  const vidMeta = manifest?.steps?.['04-video'];
+  const history = vidMeta?.history || [];
+
+  // Build map: { 'M_turntable': { version, needsReview }, ... }
+  const done = {};
+  for (const h of history) {
+    const key = `${h.size}_${h.videoType}`;
+    if (!done[key] || h.version > done[key].version) done[key] = h;
+  }
+
+  const videoUrl = (size, videoType) => {
+    const h = done[`${size}_${videoType}`];
+    if (!h) return null;
+    return `${API_BASE}/lines/${line.id}/steps/04-video/artifacts/${size}_${videoType}.mp4?version=${h.version}`;
+  };
+
   return (
-    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
+    <div className="flex flex-col gap-4">
       {line.sizes.map((s) => (
-        <div key={s} className="pp-card rounded-lg p-3">
-          <div className="flex items-center justify-between mb-2">
-            <span className="pp-mono text-xs px-2 py-0.5 rounded-md bg-lavender-soft text-lavender-dark">{s}</span>
-            <button className="pp-btn-ghost" onClick={() => onRegenItem(line.id, s)} aria-label={`Перегенерировать видео для ${s}`}>
-              <RotateCcw size={13} aria-hidden="true" />
-            </button>
+        <div key={s} className="pp-card rounded-lg p-4">
+          <div className="pp-mono text-xs px-2 py-0.5 rounded-md bg-lavender-soft text-lavender-dark inline-block mb-3">{s}</div>
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
+            {VIDEO_TYPES.map((type) => {
+              const url  = videoUrl(s, type.key);
+              const meta = done[`${s}_${type.key}`];
+              return (
+                <div key={type.key} className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--line)' }}>
+                  <div className="relative" style={{ background: 'var(--paper)' }}>
+                    {url
+                      ? <video src={url} controls className="w-full" style={{ maxHeight: 160 }} />
+                      : <div className="flex items-center justify-center" style={{ height: 80 }}><Film size={24} className="pp-muted" aria-hidden="true" /></div>
+                    }
+                    {meta?.needsReview && <span className="absolute top-1 right-1 text-xs bg-yellow-100 text-yellow-800 px-1 rounded">проверить</span>}
+                  </div>
+                  <div className="p-2 flex items-center justify-between">
+                    <span className="text-xs pp-muted">{type.label}</span>
+                    <button className="pp-btn-ghost" onClick={() => onRegenItem(line.id, s, type.key)} aria-label={`Перегенерировать ${type.label} для ${s}`}>
+                      <RotateCcw size={13} aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <div className="rounded-md flex items-center justify-center mb-2" style={{ height: 80, background: 'var(--paper)', border: '1px solid var(--line)' }}>
-            <span className="text-xs pp-muted">нет видео</span>
-          </div>
-          <div className="text-xs pp-muted">Видео: шаг не запущен</div>
         </div>
       ))}
+      {!vidMeta && <p className="text-sm pp-muted">Видео ещё не генерировались. Нажмите «Перегенерировать».</p>}
     </div>
   );
 }
@@ -849,7 +885,7 @@ export default function PipelineApp() {
       case 'normalize': return <NormalizeView line={line} manifest={manifests[activeLineId]} />;
       case 'texts': return <TextsView line={line} manifest={manifests[activeLineId]} />;
       case 'images': return <ImagesView line={line} manifest={manifests[activeLineId]} onRegenItem={handleRegenerateItem} />;
-      case 'video': return <VideoView line={line} onRegenItem={handleRegenerateItem} />;
+      case 'video': return <VideoView line={line} manifest={manifests[activeLineId]} onRegenItem={handleRegenerateItem} />;
       case 'excel': return <ExcelView line={line} manifest={manifests[activeLineId]} />;
       case 'assemble': return <AssembleView line={line} manifest={manifests[activeLineId]} />;
       default: return null;

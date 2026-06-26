@@ -6,12 +6,8 @@
     "lifestyle": "Hands working with silicone mold «{{moldName}}», pouring cotton wool material, cozy crafting studio, warm light"
   },
   "klingApi": {
-    "imageToVideo": {
-      "model":    "kling-v1",
-      "duration": 5,
-      "cfg_scale": 0.5
-    },
+    "model": "kling-3.0",
     "pollIntervalMs": 5000,
-    "pollTimeoutMs":  300000
+    "pollTimeoutMs":  180000
   }
 }

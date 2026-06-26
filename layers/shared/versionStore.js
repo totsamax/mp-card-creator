@@ -41,7 +41,16 @@ const local = {
     }
 
     const existing = manifest.steps[stepId] || {};
-    manifest.steps[stepId] = deepMerge(existing, patch);
+
+    // pushHistory: atomic append to history array (safe for concurrent writers)
+    let resolvedPatch = patch;
+    if (patch.pushHistory) {
+      existing.history = [...(existing.history || []), patch.pushHistory];
+      const { pushHistory, ...rest } = patch;
+      resolvedPatch = rest;
+    }
+
+    manifest.steps[stepId] = deepMerge(existing, resolvedPatch);
 
     await fs.promises.writeFile(p, JSON.stringify(manifest, null, 2), 'utf8');
     return manifest;
@@ -142,7 +151,16 @@ const yandexCloud = {
       : { article, steps: {} };
 
     const existing = manifest.steps[stepId] || {};
-    manifest.steps[stepId] = deepMerge(existing, patch);
+
+    // pushHistory: atomic append to history array (safe for concurrent writers)
+    let resolvedPatch = patch;
+    if (patch.pushHistory) {
+      existing.history = [...(existing.history || []), patch.pushHistory];
+      const { pushHistory, ...rest } = patch;
+      resolvedPatch = rest;
+    }
+
+    manifest.steps[stepId] = deepMerge(existing, resolvedPatch);
 
     await client.send(new PutCommand({
       TableName: YDB_TABLE(),
@@ -231,12 +249,26 @@ function getAdapter() {
 }
 
 // ---------------------------------------------------------------------------
+// Per-article manifest write lock — serializes concurrent updateManifest calls
+// to prevent read-merge-write races when multiple step handlers run in parallel.
+// ---------------------------------------------------------------------------
+
+const _manifestLocks = new Map();
+
+function withManifestLock(article, fn) {
+  const prev = _manifestLocks.get(article) || Promise.resolve();
+  const next = prev.then(fn, fn); // run fn regardless of prev outcome
+  _manifestLocks.set(article, next.then(() => {}, () => {}));
+  return next;
+}
+
+// ---------------------------------------------------------------------------
 // Public interface — delegates to the selected adapter
 // ---------------------------------------------------------------------------
 
 module.exports = {
   getManifest:    (article)                          => getAdapter().getManifest(article),
-  updateManifest: (article, stepId, patch)           => getAdapter().updateManifest(article, stepId, patch),
+  updateManifest: (article, stepId, patch)           => withManifestLock(article, () => getAdapter().updateManifest(article, stepId, patch)),
   putArtifact:    (article, stepId, version, name, buffer) => getAdapter().putArtifact(article, stepId, version, name, buffer),
   getArtifact:    (article, stepId, version, name)   => getAdapter().getArtifact(article, stepId, version, name),
   listArtifacts:  (article, stepId, version)         => getAdapter().listArtifacts(article, stepId, version),

@@ -9,7 +9,7 @@ const store        = require(path.join(SHARED, 'versionStore'));
 const promptsTmpl  = require(path.join(SHARED, 'config/prompts.texts.json'));
 const criticRules  = require(path.join(SHARED, 'config/prompts.critic-texts.json'));
 
-const OPENAI_BASE  = (process.env.OPENAI_BASE_URL || 'https://api.openai.com').replace(/\/$/, '').replace(/\/v\d+$/, '');
+const OPENAI_BASE  = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
 const STEP_ID      = '02-texts';
@@ -86,7 +86,7 @@ exports.handler = async (event) => {
       // error/failedAt cleared on success so a retry resolves a prior failure.
       await store.updateManifest(article, STEP_ID, {
         currentVersion: nextVersion,
-        history: [...(stepMeta?.history ?? []), historyEntry],
+        pushHistory: historyEntry,
         error: null,
         failedAt: null,
       });
@@ -111,10 +111,8 @@ exports.handler = async (event) => {
 // ---------------------------------------------------------------------------
 
 async function generateTexts(sizeRecord, feedback) {
-  const anthropicKey    = process.env.ANTHROPIC_API_KEY;
-  const openaiKey       = process.env.OPENAI_API_KEY;
-  const openrouterKey   = process.env.OPENROUTER_API_KEY;
-  const openrouterModel = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
+  const openrouterKey = process.env.OPENROUTER_API_KEY;
+  const openaiKey     = process.env.OPENAI_API_KEY;
 
   const feedbackBlock = feedback.length > 0
     ? promptsTmpl.feedbackBlock.replace('{{issues}}', feedback.map(i => `• ${i}`).join('\n'))
@@ -133,71 +131,16 @@ async function generateTexts(sizeRecord, feedback) {
     .replace('{{purpose}}',       sizeRecord.purpose)
     .replace('{{feedbackBlock}}', feedbackBlock);
 
-  // USE_STUB=true → skip API call, use template-computed texts from master data
-  if (process.env.USE_STUB === 'true' || (!anthropicKey && !openaiKey && !openrouterKey)) {
-    return templateTexts(sizeRecord);
+  if (!openrouterKey && !openaiKey) {
+    throw new Error('No API key set: OPENROUTER_API_KEY or OPENAI_API_KEY required');
   }
 
-  if (anthropicKey) {
-    try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method:  'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': anthropicKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model:      'claude-haiku-4-5-20251001',
-          max_tokens: 512,
-          system:     promptsTmpl.generate.system,
-          messages:   [{ role: 'user', content: userPrompt }],
-        }),
-      });
-      if (!res.ok) throw new Error(`Anthropic API error: ${res.status} ${await res.text()}`);
-      const data    = await res.json();
-      const text    = data.content[0].text;
-      const jsonStr = (text.match(/\{[\s\S]*\}/) || [text])[0];
-      return JSON.parse(jsonStr);
-    } catch (err) {
-      if (openaiKey) {
-        console.warn('[step-texts] Anthropic unavailable, trying OpenAI:', err.message);
-      } else {
-        console.warn('[step-texts] Anthropic unavailable, using stub:', err.message);
-        return templateTexts(sizeRecord);
-      }
-    }
-  }
-
-  if (openaiKey) {
-    try {
-      const res = await fetch(`${OPENAI_BASE}/v1/chat/completions`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${openaiKey}` },
-        body: JSON.stringify({
-          model: OPENAI_MODEL,
-          response_format: { type: 'json_object' },
-          messages: [
-            { role: 'system', content: promptsTmpl.generate.system },
-            { role: 'user',   content: userPrompt },
-          ],
-        }),
-      });
-      if (!res.ok) throw new Error(`OpenAI API error: ${res.status} ${await res.text()}`);
-      const data = await res.json();
-      return JSON.parse(data.choices[0].message.content);
-    } catch (err) {
-      if (openrouterKey) {
-        console.warn('[step-texts] OpenAI unavailable, trying OpenRouter:', err.message);
-      } else {
-        console.warn('[step-texts] OpenAI unavailable, using stub:', err.message);
-        return templateTexts(sizeRecord);
-      }
-    }
-  }
-
+  // OpenRouter — приоритет для текстов
   if (openrouterKey) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 45_000);
     try {
+      const model = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method:  'POST',
         headers: {
@@ -207,33 +150,43 @@ async function generateTexts(sizeRecord, feedback) {
           'X-Title':       'mp-card-creator',
         },
         body: JSON.stringify({
-          model:    openrouterModel,
+          model,
+          response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: promptsTmpl.generate.system },
             { role: 'user',   content: userPrompt },
           ],
         }),
+        signal: controller.signal,
       });
-      if (!res.ok) throw new Error(`OpenRouter API error: ${res.status} ${await res.text()}`);
+      if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${await res.text()}`);
       const data    = await res.json();
       const content = data.choices[0].message.content;
       const jsonStr = (content.match(/\{[\s\S]*\}/) || [content])[0];
       return JSON.parse(jsonStr);
-    } catch (err) {
-      console.warn('[step-texts] OpenRouter unavailable, using stub:', err.message);
-      return templateTexts(sizeRecord);
+    } finally {
+      clearTimeout(timer);
     }
   }
 
-  return templateTexts(sizeRecord);
-}
-
-function templateTexts(sizeRecord) {
-  return {
-    titleShort: sizeRecord.titleShort,
-    titleFull:  sizeRecord.titleFull,
-    annotation: sizeRecord.annotation,
-  };
+  // Fallback: OPENAI_API_KEY + OPENAI_BASE_URL
+  const res = await fetch(`${OPENAI_BASE}/chat/completions`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${openaiKey}` },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: promptsTmpl.generate.system },
+        { role: 'user',   content: userPrompt },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`OpenAI ${res.status}: ${await res.text()}`);
+  const data    = await res.json();
+  const content = data.choices[0].message.content;
+  const jsonStr = (content.match(/\{[\s\S]*\}/) || [content])[0];
+  return JSON.parse(jsonStr);
 }
 
 // ---------------------------------------------------------------------------

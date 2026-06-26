@@ -31,18 +31,28 @@ function patchConsole(method) {
 ['log', 'warn', 'error'].forEach(patchConsole);
 
 // Load .env.local from project root (if present) — does not override existing vars
+let envLoaded = 0;
 try {
   const envPath = path.resolve(__dirname, '../.env.local');
-  fs.readFileSync(envPath, 'utf8').split('\n').forEach(line => {
+  fs.readFileSync(envPath, 'utf8').split(/\r?\n/).forEach(line => {
     const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
     if (m && process.env[m[1]] === undefined) {
       process.env[m[1]] = m[2].trim().replace(/^['"]|['"]$/g, '');
+      envLoaded++;
     }
   });
 } catch { /* .env.local not present — ok */ }
 const { handler } = require(path.resolve(__dirname, '../functions/api'));
 
 const PORT = process.env.PORT || 3001;
+
+// Startup diagnostic — confirms which AI keys are present (values masked)
+console.log(`[local-server] .env.local loaded ${envLoaded} vars`);
+console.log(`[local-server] OPENAI_API_KEY   : ${process.env.OPENAI_API_KEY   ? process.env.OPENAI_API_KEY.slice(0,6)+'***' : '(not set)'}`);
+console.log(`[local-server] OPENAI_BASE_URL  : ${process.env.OPENAI_BASE_URL  || '(not set)'}`);
+console.log(`[local-server] OPENAI_IMAGE_MODEL: ${process.env.OPENAI_IMAGE_MODEL || '(not set, default gpt-image-1)'}`);
+console.log(`[local-server] OPENROUTER_API_KEY: ${process.env.OPENROUTER_API_KEY ? process.env.OPENROUTER_API_KEY.slice(0,6)+'***' : '(not set)'}`);
+console.log(`[local-server] STORE_ADAPTER    : ${process.env.STORE_ADAPTER    || '(not set, default cloud-with-fallback)'}`);
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);

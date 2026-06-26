@@ -2,8 +2,8 @@
   "name": "mp-card-frontend",
   "private": true,
   "scripts": {
-    "dev":     "vite --port 5173",
-    "build":   "vite build",
+    "dev": "vite --port 5173",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -13,6 +13,6 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
-    "vite": "^5.4.2"
+    "vite": "^8.1.0"
   }
 }
