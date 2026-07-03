@@ -18,16 +18,20 @@ const MAX_ATTEMPTS = 3;
 
 /**
  * Message shape:
- *   { article, size, imageType, attempt, feedback?, force?, attemptsLog? }
+ *   { article, size, slideId?, imageType?, attempt, feedback?, force?, attemptsLog?, runVersion? }
  *
- * imageType: 'infographic' (single-type MVP — see api IMAGE_TYPES)
+ * slideKey = slideId || imageType. Default image types (main/infographic/scale/
+ * lifestyle) arrive as imageType; per-article custom slides arrive as slideId
+ * (id starting with `custom-`). The generation prompt is sourced from the
+ * per-article slidesConfig (D-02), falling back to on-disk defaults.
  */
 exports.handler = async (event) => {
   const msg = parseMessage(event);
   if (!msg) return respond(400, { error: 'Invalid message' });
 
-  const { article, size, imageType, attempt = 1, feedback = [], force = false, attemptsLog = [], runVersion } = msg;
-  if (!imageType) return respond(400, { error: 'imageType is required' });
+  const { article, size, imageType, slideId, attempt = 1, feedback = [], force = false, attemptsLog = [], runVersion } = msg;
+  const slideKey = slideId || imageType;
+  if (!slideKey) return respond(400, { error: 'slideId or imageType is required' });
 
   // Top-level try/catch (REL-01 / D-06): any throw records { error, failedAt }
   // to the manifest step entry so the frontend can render an 'error' state.
@@ -43,23 +47,27 @@ exports.handler = async (event) => {
     if (!sizeRecord) return respond(400, { error: `Size "${size}" not found in master data` });
 
     const stepMeta  = manifest?.steps?.[STEP_ID];
-    const inputHash = sha256(JSON.stringify({ sizeRecord, imageType, promptsTmpl }));
+
+    // Cache key includes the RESOLVED prompt (slidesConfig-authored or default)
+    // so editing a slide's generatedPrompt busts the cache (Pitfall 6).
+    const resolvedPrompt = await resolveSlidePrompt(article, slideKey, sizeRecord);
+    const inputHash = sha256(JSON.stringify({ sizeRecord, slideKey, resolvedPrompt }));
 
     // Cache check
     if (attempt === 1 && !force && stepMeta) {
       const last = stepMeta.history?.slice(-1)[0];
       if (last?.inputHash === inputHash && !last?.needsReview) {
-        return respond(200, { skipped: true, article, size, imageType, stepId: STEP_ID });
+        return respond(200, { skipped: true, article, size, slideId: slideKey, imageType: slideKey, stepId: STEP_ID });
       }
     }
 
     // --- Generate image ---
-    console.log(`[step-images] generating ${article} ${size}/${imageType} attempt=${attempt}`);
+    console.log(`[step-images] generating ${article} ${size}/${slideKey} attempt=${attempt}`);
     let imageBuffer;
     try {
-      imageBuffer = await generateImage(article, sizeRecord, imageType, feedback);
+      imageBuffer = await generateImage(article, sizeRecord, slideKey, feedback);
     } catch (err) {
-      console.error(`[step-images] generation failed ${size}/${imageType}:`, err.message);
+      console.error(`[step-images] generation failed ${size}/${slideKey}:`, err.message);
       await store.updateManifest(article, STEP_ID, { error: err.message, failedAt: new Date().toISOString() });
       return respond(500, { error: `Image generation failed: ${err.message}` });
     }
@@ -67,7 +75,7 @@ exports.handler = async (event) => {
     // --- Critic (Claude Vision or stub) ---
     let criticVerdict;
     try {
-      criticVerdict = await runCritic(imageBuffer, sizeRecord, imageType);
+      criticVerdict = await runCritic(imageBuffer, sizeRecord, slideKey);
     } catch (err) {
       // If critic call fails, treat as ok to not block the pipeline.
       // This is NOT a step error — do NOT write { error, failedAt } here.
@@ -78,14 +86,15 @@ exports.handler = async (event) => {
     if (criticVerdict.ok || attempt >= MAX_ATTEMPTS) {
       const nextVersion  = runVersion ?? (stepMeta?.currentVersion ?? 0) + 1;
       const needsReview  = !criticVerdict.ok;
-      const artifactName = `${size}_${imageType}.png`;
+      const artifactName = `${size}_${slideKey}.png`;
 
       await store.putArtifact(article, STEP_ID, nextVersion, artifactName, imageBuffer);
 
       const historyEntry = {
         version: nextVersion,
         size,
-        imageType,
+        slideId: slideKey,
+        imageType: slideKey, // kept for backward-compatible history matching
         createdAt: new Date().toISOString(),
         inputHash,
         needsReview,
@@ -101,16 +110,16 @@ exports.handler = async (event) => {
         ...(needsReview ? { overrides: { [artifactName]: `v${nextVersion}` } } : {}),
       });
 
-      console.log(`[step-images] saved ${article} ${size}/${imageType} → v${nextVersion}${needsReview ? ' ⚠ needsReview' : ' ✓'}`);
+      console.log(`[step-images] saved ${article} ${size}/${slideKey} → v${nextVersion}${needsReview ? ' ⚠ needsReview' : ' ✓'}`);
       return respond(200, {
-        article, size, imageType, stepId: STEP_ID,
+        article, size, slideId: slideKey, imageType: slideKey, stepId: STEP_ID,
         version: nextVersion, needsReview, artifactName,
       });
     }
 
     // Critic rejected — recurse directly (local retry, no YMQ)
     return exports.handler({ body: JSON.stringify({
-      article, size, imageType, attempt: attempt + 1, feedback: criticVerdict.issues, force, runVersion,
+      article, size, slideId: slideKey, attempt: attempt + 1, feedback: criticVerdict.issues, force, runVersion,
       attemptsLog: [...attemptsLog, { attempt, criticVerdict }],
     }) });
   } catch (err) {
@@ -139,14 +148,51 @@ function substitutePrompt(sizeRecord, imageType) {
 }
 
 /**
- * buildEditRequest(article, sizeRecord, imageType, feedback)
+ * resolveSlidePrompt(article, slideKey, sizeRecord) → Promise<string>
+ *
+ * Sources the base generation prompt from the per-article slidesConfig written
+ * by Plan 01 (`manifest.steps['03-images'].slidesConfig.slides[].generatedPrompt`).
+ * When no slidesConfig exists or the slide has no non-empty generatedPrompt,
+ * falls back to the on-disk default template (substitutePrompt) — this keeps the
+ * four default image types backward-compatible (D-02/D-03) and keeps step-images
+ * decoupled from Plan 01's buildDefaultSlides.
+ */
+async function resolveSlidePrompt(article, slideKey, sizeRecord) {
+  try {
+    const manifest = await store.getManifest(article);
+    const slides   = manifest?.steps?.[STEP_ID]?.slidesConfig?.slides;
+    const slide    = Array.isArray(slides) ? slides.find(s => s.id === slideKey) : null;
+    if (slide && typeof slide.generatedPrompt === 'string' && slide.generatedPrompt.trim().length > 0) {
+      return slide.generatedPrompt;
+    }
+  } catch (err) {
+    console.warn('[step-images] could not read slidesConfig, using default prompt:', err.message);
+  }
+  return substitutePrompt(sizeRecord, slideKey);
+}
+
+/**
+ * appendSizeDimensions(prompt, sizeRecord) → string
+ *
+ * A per-article generatedPrompt is authored once but generation runs per size
+ * (XS–XL). Append a resolved per-size physical block so the LLM-authored prose
+ * stays size-agnostic while the physical facts stay accurate (Pitfall 3 / A1).
+ */
+function appendSizeDimensions(prompt, sizeRecord) {
+  return `${prompt}\nDimensions: ${sizeRecord.moldLength}×${sizeRecord.moldWidth}×${sizeRecord.moldHeight} cm, size ${sizeRecord.moldSize} cm.`;
+}
+
+/**
+ * buildEditRequest(article, sizeRecord, slideKey, feedback)
  *   → Promise<{ prompt, imageCount }>
  *
- * prompt: composition instruction with all tokens resolved.
+ * prompt: slidesConfig-authored (or default) base prompt + per-size dimensions
+ *         + optional feedback suffix.
  * imageCount: 1 (background template) + number of mold photos.
  */
-async function buildEditRequest(article, sizeRecord, imageType, feedback = []) {
-  let prompt = substitutePrompt(sizeRecord, imageType);
+async function buildEditRequest(article, sizeRecord, slideKey, feedback = []) {
+  let prompt = await resolveSlidePrompt(article, slideKey, sizeRecord);
+  prompt = appendSizeDimensions(prompt, sizeRecord);
 
   if (feedback.length > 0) {
     prompt += promptsTmpl.feedbackSuffix.replace('{{issues}}', feedback.join('; '));
@@ -168,13 +214,12 @@ function isApiframe() {
   return base.includes('apiframe') || key.startsWith('afk_');
 }
 
-async function generateImage(article, sizeRecord, imageType, feedback) {
+async function generateImage(article, sizeRecord, slideKey, feedback) {
   const apiKey = process.env.OPENAI_API_KEY;
 
-  let prompt = substitutePrompt(sizeRecord, imageType);
-  if (feedback.length > 0) {
-    prompt += promptsTmpl.feedbackSuffix.replace('{{issues}}', feedback.join('; '));
-  }
+  // Build the prompt through the same slidesConfig-aware resolve+append path
+  // used by buildEditRequest so generation uses the edited per-article prompt.
+  const { prompt } = await buildEditRequest(article, sizeRecord, slideKey, feedback);
 
   if (!apiKey) throw new Error('OPENAI_API_KEY not set');
 
@@ -182,8 +227,8 @@ async function generateImage(article, sizeRecord, imageType, feedback) {
     return await generateImageApiframe(article, prompt);
   }
 
-  // Standard OpenAI: try images/generations, then images/edits
-  return generateImageOpenAI(article, prompt, imageType);
+  // Standard OpenAI: try images/generations, then images/edits (default ids only)
+  return generateImageOpenAI(article, prompt, slideKey);
 }
 
 // ---------------------------------------------------------------------------
@@ -256,7 +301,7 @@ async function generateImageApiframe(article, prompt) {
 // Standard OpenAI: images/generations → images/edits
 // ---------------------------------------------------------------------------
 
-async function generateImageOpenAI(article, prompt, imageType) {
+async function generateImageOpenAI(article, prompt, slideKey) {
   const apiKey = process.env.OPENAI_API_KEY;
 
   // Try images/generations (text-to-image, simplest path)
@@ -281,8 +326,16 @@ async function generateImageOpenAI(article, prompt, imageType) {
     console.warn('[step-images] images/generations error, trying images/edits:', err.message);
   }
 
+  // Custom slides (id `custom-*`) have no on-disk template; the images/edits
+  // fallback would form an arbitrary `templates/{slideKey}.png` path (T-999.1-05).
+  // Only the four default image types ever reach the template read.
+  const DEFAULT_TYPES = ['main', 'infographic', 'scale', 'lifestyle'];
+  if (!DEFAULT_TYPES.includes(slideKey)) {
+    throw new Error(`images/generations failed and no template exists for custom slide "${slideKey}"`);
+  }
+
   // Fallback: images/edits (image-in-image with background template + mold photos)
-  const templatePath = path.join(SHARED, 'templates', `${imageType}.png`);
+  const templatePath = path.join(SHARED, 'templates', `${slideKey}.png`);
   let bgBuffer;
   try {
     bgBuffer = fs.readFileSync(templatePath);
@@ -300,7 +353,7 @@ async function generateImageOpenAI(article, prompt, imageType) {
   form.append('model', OPENAI_IMAGE_MODEL);
   form.append('prompt', prompt);
   form.append('size', '1024x1024');
-  form.append('image[]', new Blob([bgBuffer], { type: 'image/png' }), `${imageType}.png`);
+  form.append('image[]', new Blob([bgBuffer], { type: 'image/png' }), `${slideKey}.png`);
   photoBuffers.forEach((buf, i) => form.append('image[]', new Blob([buf], { type: 'image/png' }), `mold-${i}.png`));
 
   const res = await fetch(`${OPENAI_BASE}/images/edits`, {
