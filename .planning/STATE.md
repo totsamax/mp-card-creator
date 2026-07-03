@@ -6,14 +6,14 @@ current_phase: 999.1
 current_phase_name: editable-image-prompts-with-save-to-config
 status: executing
 stopped_at: Completed 999.1-01-PLAN.md
-last_updated: "2026-07-03T13:25:55.823Z"
+last_updated: "2026-07-03T13:36:33.080Z"
 last_activity: 2026-07-03
 last_activity_desc: Phase 999.1 execution started
 progress:
   total_phases: 9
   completed_phases: 5
   total_plans: 17
-  completed_plans: 15
+  completed_plans: 16
   percent: 56
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-15)
 ## Current Position
 
 Phase: 999.1 (editable-image-prompts-with-save-to-config) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-07-03 — Phase 999.1 execution started
 
@@ -66,6 +66,7 @@ Progress: [████████░░] 80%
 | Phase 04-connected-frontend P03 | 30 | 3 tasks | 1 files |
 | Phase 05-e2e-validation P01 | 2 | 2 tasks | 3 files |
 | Phase 999.1 P01 | 25min | 3 tasks | 3 files |
+| Phase 999.1 P02 | 25 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -98,6 +99,7 @@ Recent decisions affecting current work:
 - [Phase 04 P03]: D-01/D-02 — setInterval 5s + clearInterval cleanup в useEffect keyed on runningCount; optimistic running сразу после 202 (до первого poll)
 - [Phase ?]: POST (not PUT) for slide save — local-server CORS advertises only GET/POST/OPTIONS
 - [Phase ?]: slide-files pseudo-step registered in manifest + artifact route name group broadened to (.+) so nested {slideId}/{filename} refs are retrievable
+- [Phase ?]: step-images sources prompt from per-article slidesConfig with on-disk default fallback (D-02)
 
 ### Pending Todos
 
@@ -119,6 +121,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-03T13:25:55.814Z
+Last session: 2026-07-03T13:35:52.698Z
 Stopped at: Completed 999.1-01-PLAN.md
 Resume file: None

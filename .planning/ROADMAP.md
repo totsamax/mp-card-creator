@@ -155,12 +155,12 @@ Plans:
 
 **Goal:** На панели шага 03-images пользователь настраивает набор слайдов для линейки: описание → AI-промпт → правит промпт → прикладывает файлы → генерирует изображение. Конфигурация слайдов хранится per-article в манифесте (YDB, cloud-fallback), не в `prompts.images.json`
 **Requirements:** D-01..D-12 (phase decisions; связаны с IMG-01/IMG-04)
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 
 - [x] 999.1-01-PLAN.md — Backend: маршруты /slides (GET/POST, generate-prompt, regenerate, file-upload), slidesConfig в манифесте, defaults-seeding
-- [ ] 999.1-02-PLAN.md — step-images: источник промпта из slidesConfig, per-size данные, custom-слайды, наименование {size}_{slideId}.png
+- [x] 999.1-02-PLAN.md — step-images: источник промпта из slidesConfig, per-size данные, custom-слайды, наименование {size}_{slideId}.png
 - [ ] 999.1-03-PLAN.md — Frontend: редактор слайдов в ImagesView (описание→промпт→файлы→генерация), slide-driven сетка результатов
 
 ---
