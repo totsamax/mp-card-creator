@@ -5,7 +5,7 @@ frontend/dist
 # Локальные данные
 output/
 logs/
-test/
+test/tmp-output/
 
 # Секреты — не коммитить
 infra/env.sh
