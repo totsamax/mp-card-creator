@@ -293,13 +293,14 @@ function TextsView({ line, manifest }) {
   );
 }
 
-function ImagesView({ line, manifest, onRegenItem, showToast }) {
+function ImagesView({ line, manifest, showToast, onImagesRunning }) {
   // --- Slide editor state (999.1-03) ---
   const [slides, setSlides]                 = useState(null);
   const [feedbackSuffix, setFeedbackSuffix] = useState('');
   const [promptBusy, setPromptBusy]         = useState({});   // slideId → bool (generate-prompt in flight)
   const [promptError, setPromptError]       = useState({});   // slideId → error copy
   const [descError, setDescError]           = useState({});   // slideId → bool (empty-description attempt)
+  const [genBusy, setGenBusy]               = useState({});   // slideId → bool (image regenerate request in flight)
   const [confirmRemove, setConfirmRemove]   = useState(null); // slideId pending confirm
   const [saving, setSaving]                 = useState(false);
 
@@ -346,10 +347,13 @@ function ImagesView({ line, manifest, onRegenItem, showToast }) {
 
   const removeSlide = (id) => { setSlides((prev) => (prev || []).filter((s) => s.id !== id)); setConfirmRemove(null); };
 
+  // Persist the whole config (used by Save and before any generation so step-images reads current prompts).
+  const persistConfig = () => apiFetch(`/lines/${line.id}/slides`, { method: 'POST', body: JSON.stringify({ feedbackSuffix, slides }) });
+
   const saveConfig = async () => {
     setSaving(true);
     try {
-      await apiFetch(`/lines/${line.id}/slides`, { method: 'POST', body: JSON.stringify({ feedbackSuffix, slides }) });
+      await persistConfig();
       showToast('Конфигурация слайдов сохранена');
     } catch (err) {
       showToast(`Ошибка: ${err.message}`);
@@ -358,21 +362,70 @@ function ImagesView({ line, manifest, onRegenItem, showToast }) {
     }
   };
 
-  // --- Result grid (unchanged in this task) ---
+  // Multipart upload — do NOT use apiFetch (it forces application/json and breaks the boundary).
+  const handleAttach = async (slideId, fileList) => {
+    const files = Array.from(fileList || []);
+    if (files.length === 0) return;
+    const fd = new FormData();
+    for (const f of files) fd.append('files', f, f.name);
+    try {
+      const res = await fetch(`${API_BASE}/lines/${line.id}/slides/${slideId}/files`, { method: 'POST', body: fd });
+      if (!res.ok) throw new Error(`POST /slides/${slideId}/files → ${res.status}`);
+      const data = await res.json();
+      const refs = Array.isArray(data.refs) ? data.refs : [];
+      setSlides((prev) => (prev || []).map((s) => (s.id === slideId ? { ...s, files: [...(s.files || []), ...refs] } : s)));
+    } catch (err) {
+      showToast(`Ошибка загрузки: ${err.message}`);
+    }
+  };
+
+  const removeFile = (slideId, ref) => setSlides((prev) => (prev || []).map((s) => (s.id === slideId ? { ...s, files: (s.files || []).filter((f) => f !== ref) } : s)));
+
+  const regenerateSlide = async (slide) => {
+    setGenBusy((b) => ({ ...b, [slide.id]: true }));
+    try {
+      await persistConfig(); // ensure step-images reads the current prompt/files
+      await apiFetch(`/lines/${line.id}/slides/${slide.id}/regenerate`, { method: 'POST', body: JSON.stringify({ force: true }) });
+      onImagesRunning();     // optimistic running on the existing 5s poll
+      showToast(`Генерация запущена: ${slide.label}`);
+    } catch (err) {
+      showToast(`Ошибка: ${err.message}`);
+    } finally {
+      setGenBusy((b) => ({ ...b, [slide.id]: false }));
+    }
+  };
+
+  const generateAll = async () => {
+    const list = slides || [];
+    if (list.length === 0) return;
+    try {
+      await persistConfig();
+      for (const s of list) {
+        await apiFetch(`/lines/${line.id}/slides/${s.id}/regenerate`, { method: 'POST', body: JSON.stringify({ force: true }) });
+      }
+      onImagesRunning();
+      showToast('Генерация всех слайдов запущена');
+    } catch (err) {
+      showToast(`Ошибка: ${err.message}`);
+    }
+  };
+
+  // --- Slide-driven result grid (Plan 02 naming: {size}_{slideId}.png) ---
   const imgMeta = manifest?.steps?.['03-images'];
   const history = imgMeta?.history || [];
 
-  // Build map: { 'M_main': { version, needsReview }, ... }
+  // Build map keyed on {size}_{slideKey} so both custom and default slides display.
   const done = {};
   for (const h of history) {
-    const key = `${h.size}_${h.imageType}`;
+    const slideKey = h.slideId || h.imageType;
+    const key = `${h.size}_${slideKey}`;
     if (!done[key] || h.version > done[key].version) done[key] = h;
   }
 
-  const imgUrl = (size, imageType) => {
-    const h = done[`${size}_${imageType}`];
+  const imgUrl = (size, slideId) => {
+    const h = done[`${size}_${slideId}`];
     if (!h) return null;
-    return `${API_BASE}/lines/${line.id}/steps/03-images/artifacts/${size}_${imageType}.png?version=${h.version}`;
+    return `${API_BASE}/lines/${line.id}/steps/03-images/artifacts/${size}_${slideId}.png?version=${h.version}`;
   };
 
   return (
@@ -442,6 +495,36 @@ function ImagesView({ line, manifest, onRegenItem, showToast }) {
                     onChange={(e) => updateSlide(slide.id, { generatedPrompt: e.target.value })}
                     style={!hasPrompt ? { color: 'var(--muted)', background: 'var(--paper)' } : undefined}
                   />
+
+                  {/* Reference-file attachments (D-09) */}
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    <label className="pp-btn pp-btn-ghost" aria-label="Прикрепить файлы" title="Прикрепить файлы" style={{ cursor: 'pointer' }}>
+                      <Paperclip size={14} aria-hidden="true" />
+                      <input type="file" multiple style={{ display: 'none' }} onChange={(e) => { handleAttach(slide.id, e.target.files); e.target.value = ''; }} />
+                    </label>
+                    <span className="pp-muted" style={{ fontSize: 12, fontWeight: 400 }}>Референсы, шаблоны, фото — необязательно</span>
+                  </div>
+                  {Array.isArray(slide.files) && slide.files.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {slide.files.map((ref) => (
+                        <span key={ref} className="pp-mono text-xs flex items-center gap-1 rounded-md px-2 py-0.5" style={{ background: 'var(--paper)', border: '1px solid var(--line)' }}>
+                          {ref.split('/').pop()}
+                          <button className="pp-btn-ghost" aria-label={`Убрать файл ${ref.split('/').pop()}`} style={{ padding: 0 }} onClick={() => removeFile(slide.id, ref)}>
+                            <X size={12} aria-hidden="true" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Per-slide image generation (D-08) */}
+                  <div className="flex items-center gap-3 mt-3 flex-wrap">
+                    <button className="pp-btn pp-btn-primary" disabled={genBusy[slide.id]} onClick={() => regenerateSlide(slide)}>
+                      {genBusy[slide.id]
+                        ? <><Loader2 size={14} aria-hidden="true" style={{ animation: 'pp-spin 1s linear infinite' }} /> Генерирую…</>
+                        : <><ImageIcon size={14} aria-hidden="true" /> Сгенерировать изображение</>}
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -458,32 +541,35 @@ function ImagesView({ line, manifest, onRegenItem, showToast }) {
               <button className="pp-btn pp-btn-primary" disabled={saving} onClick={saveConfig}>
                 {saving ? 'Сохраняю…' : 'Сохранить'}
               </button>
+              <button className="pp-btn pp-btn-primary" onClick={generateAll}>
+                <ImageIcon size={14} aria-hidden="true" /> Сгенерировать все
+              </button>
             </div>
           </div>
         )}
       </section>
 
-      {/* Result grid */}
+      {/* Slide-driven result grid — keyed on {size}_{slideId} so custom slides display */}
       <div className="flex flex-col gap-4">
         {line.sizes.map((s) => (
           <div key={s} className="pp-card rounded-lg p-4">
             <div className="pp-mono text-xs px-2 py-0.5 rounded-md bg-lavender-soft text-lavender-dark inline-block mb-3">{s}</div>
             <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
-              {IMAGE_TYPES.map((type) => {
-                const url  = imgUrl(s, type.key);
-                const meta = done[`${s}_${type.key}`];
+              {(slides || []).map((slide) => {
+                const url  = imgUrl(s, slide.id);
+                const meta = done[`${s}_${slide.id}`];
                 return (
-                  <div key={type.key} className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--line)' }}>
+                  <div key={slide.id} className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--line)' }}>
                     <div className="relative" style={{ aspectRatio: '1', background: 'var(--paper)' }}>
                       {url
-                        ? <img src={url} alt={`${s} ${type.label}`} className="w-full h-full object-cover" />
+                        ? <img src={url} alt={`${s} ${slide.label}`} className="w-full h-full object-cover" />
                         : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={24} className="pp-muted" aria-hidden="true" /></div>
                       }
                       {meta?.needsReview && <span className="absolute top-1 right-1 text-xs bg-yellow-100 text-yellow-800 px-1 rounded">проверить</span>}
                     </div>
                     <div className="p-2 flex items-center justify-between">
-                      <span className="text-xs pp-muted">{type.label}</span>
-                      <button className="pp-btn-ghost" onClick={() => onRegenItem(line.id, s, type.key)} aria-label={`Перегенерировать ${type.label} для ${s}`}>
+                      <span className="text-xs pp-muted">{slide.label}</span>
+                      <button className="pp-btn-ghost" onClick={() => regenerateSlide(slide)} aria-label="Перегенерировать изображение">
                         <RotateCcw size={13} aria-hidden="true" />
                       </button>
                     </div>
@@ -493,7 +579,7 @@ function ImagesView({ line, manifest, onRegenItem, showToast }) {
             </div>
           </div>
         ))}
-        {!imgMeta && <p className="text-sm pp-muted">Изображения ещё не генерировались. Нажмите «Перегенерировать».</p>}
+        {!imgMeta && <p className="text-sm pp-muted">Изображения ещё не генерировались. Нажмите «Сгенерировать изображение».</p>}
       </div>
     </div>
   );
@@ -978,6 +1064,12 @@ export default function PipelineApp() {
     setTimeout(() => setToast(null), 2500);
   };
 
+  // Optimistic-running flag for the images step, driven by the existing 5s poll (D-01/D-02).
+  const markImagesRunning = useCallback(() => {
+    if (!activeLineId) return;
+    setRunningSteps((s) => ({ ...s, [`${activeLineId}.images`]: true }));
+  }, [activeLineId]);
+
   const handleRegenerateStep = async () => {
     const stepId = STEP_KEY_TO_ID[activeStep];
     showToast(`Шаг «${STEPS.find((s) => s.key === activeStep).label}» перезапускается…`);
@@ -1040,7 +1132,7 @@ export default function PipelineApp() {
     switch (activeStep) {
       case 'normalize': return <NormalizeView line={line} manifest={manifests[activeLineId]} />;
       case 'texts': return <TextsView line={line} manifest={manifests[activeLineId]} />;
-      case 'images': return <ImagesView line={line} manifest={manifests[activeLineId]} onRegenItem={handleRegenerateItem} showToast={showToast} />;
+      case 'images': return <ImagesView line={line} manifest={manifests[activeLineId]} showToast={showToast} onImagesRunning={markImagesRunning} />;
       case 'video': return <VideoView line={line} manifest={manifests[activeLineId]} onRegenItem={handleRegenerateItem} />;
       case 'excel': return <ExcelView line={line} manifest={manifests[activeLineId]} />;
       case 'assemble': return <AssembleView line={line} manifest={manifests[activeLineId]} />;
