@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Layers, Type, Image as ImageIcon, Film, FileSpreadsheet, Folder,
   ChevronDown, RotateCcw, Plus, Upload, Check, Play, Download, X,
+  Trash2, Loader2, Paperclip,
 } from 'lucide-react';
 
 // Base URL for API Gateway. Set VITE_API_BASE_URL in .env to point at the deployed gateway.
@@ -70,6 +71,7 @@ const STYLES = `
 .pp-btn-primary:hover { background: var(--lavender-dark); }
 .pp-btn-ghost { border: none; background: transparent; padding: 4px; }
 .pp-btn-ghost:hover { background: var(--lavender-soft); }
+@keyframes pp-spin { to { transform: rotate(360deg); } }
 `;
 
 const STEPS = [
@@ -291,7 +293,72 @@ function TextsView({ line, manifest }) {
   );
 }
 
-function ImagesView({ line, manifest, onRegenItem }) {
+function ImagesView({ line, manifest, onRegenItem, showToast }) {
+  // --- Slide editor state (999.1-03) ---
+  const [slides, setSlides]                 = useState(null);
+  const [feedbackSuffix, setFeedbackSuffix] = useState('');
+  const [promptBusy, setPromptBusy]         = useState({});   // slideId → bool (generate-prompt in flight)
+  const [promptError, setPromptError]       = useState({});   // slideId → error copy
+  const [descError, setDescError]           = useState({});   // slideId → bool (empty-description attempt)
+  const [confirmRemove, setConfirmRemove]   = useState(null); // slideId pending confirm
+  const [saving, setSaving]                 = useState(false);
+
+  // Load the per-line slide config (seeded defaults on first open). D-01/D-03.
+  useEffect(() => {
+    let cancelled = false;
+    setSlides(null);
+    apiFetch(`/lines/${line.id}/slides`)
+      .then((cfg) => {
+        if (cancelled) return;
+        setSlides(Array.isArray(cfg.slides) ? cfg.slides : []);
+        setFeedbackSuffix(typeof cfg.feedbackSuffix === 'string' ? cfg.feedbackSuffix : '');
+      })
+      .catch(() => { if (!cancelled) setSlides([]); });
+    return () => { cancelled = true; };
+  }, [line.id]);
+
+  const updateSlide = (id, patch) => setSlides((prev) => (prev || []).map((s) => (s.id === id ? { ...s, ...patch } : s)));
+
+  const genPrompt = async (slide) => {
+    if (!slide.description || !slide.description.trim()) {
+      setDescError((e) => ({ ...e, [slide.id]: true }));
+      return;
+    }
+    setDescError((e) => ({ ...e, [slide.id]: false }));
+    setPromptError((e) => ({ ...e, [slide.id]: '' }));
+    setPromptBusy((b) => ({ ...b, [slide.id]: true }));
+    try {
+      const res = await apiFetch(`/lines/${line.id}/slides/${slide.id}/generate-prompt`, {
+        method: 'POST', body: JSON.stringify({ description: slide.description }),
+      });
+      updateSlide(slide.id, { generatedPrompt: res.generatedPrompt });
+    } catch {
+      setPromptError((e) => ({ ...e, [slide.id]: 'Не удалось сгенерировать промпт. Проверьте описание и попробуйте снова.' }));
+    } finally {
+      setPromptBusy((b) => ({ ...b, [slide.id]: false }));
+    }
+  };
+
+  const addSlide = () => setSlides((prev) => ([...(prev || []), {
+    id: 'custom-' + crypto.randomUUID(),
+    label: 'Новый слайд', description: '', generatedPrompt: '', files: [], default: false,
+  }]));
+
+  const removeSlide = (id) => { setSlides((prev) => (prev || []).filter((s) => s.id !== id)); setConfirmRemove(null); };
+
+  const saveConfig = async () => {
+    setSaving(true);
+    try {
+      await apiFetch(`/lines/${line.id}/slides`, { method: 'POST', body: JSON.stringify({ feedbackSuffix, slides }) });
+      showToast('Конфигурация слайдов сохранена');
+    } catch (err) {
+      showToast(`Ошибка: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // --- Result grid (unchanged in this task) ---
   const imgMeta = manifest?.steps?.['03-images'];
   const history = imgMeta?.history || [];
 
@@ -309,36 +376,125 @@ function ImagesView({ line, manifest, onRegenItem }) {
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      {line.sizes.map((s) => (
-        <div key={s} className="pp-card rounded-lg p-4">
-          <div className="pp-mono text-xs px-2 py-0.5 rounded-md bg-lavender-soft text-lavender-dark inline-block mb-3">{s}</div>
-          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
-            {IMAGE_TYPES.map((type) => {
-              const url  = imgUrl(s, type.key);
-              const meta = done[`${s}_${type.key}`];
+    <div className="flex flex-col" style={{ gap: 24 }}>
+      {/* Слайды карточки — per-line slide editor (D-01) */}
+      <section>
+        <div className="mb-1" style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.3 }}>Слайды карточки</div>
+        <p className="pp-muted mb-4" style={{ fontSize: 12, fontWeight: 400, lineHeight: 1.5 }}>
+          Опишите каждый слайд — AI составит промпт, при необходимости отредактируйте его вручную.
+        </p>
+
+        {slides === null ? (
+          <div className="pp-card rounded-lg p-4">
+            <div style={{ fontSize: 14, fontWeight: 500 }}>Загрузка слайдов…</div>
+            <p className="pp-muted" style={{ fontSize: 12, fontWeight: 400 }}>Подтягиваем набор слайдов по умолчанию.</p>
+          </div>
+        ) : (
+          <div className="flex flex-col" style={{ gap: 12 }}>
+            {slides.map((slide) => {
+              const hasPrompt = Boolean(slide.generatedPrompt && slide.generatedPrompt.trim());
+              const descEmpty = !slide.description || !slide.description.trim();
               return (
-                <div key={type.key} className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--line)' }}>
-                  <div className="relative" style={{ aspectRatio: '1', background: 'var(--paper)' }}>
-                    {url
-                      ? <img src={url} alt={`${s} ${type.label}`} className="w-full h-full object-cover" />
-                      : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={24} className="pp-muted" aria-hidden="true" /></div>
-                    }
-                    {meta?.needsReview && <span className="absolute top-1 right-1 text-xs bg-yellow-100 text-yellow-800 px-1 rounded">проверить</span>}
+                <div key={slide.id} className="pp-card rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3" style={{ gap: 8 }}>
+                    <span style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.3 }}>{slide.label}</span>
+                    {!slide.default && (
+                      confirmRemove === slide.id ? (
+                        <span className="flex items-center gap-2 flex-wrap" style={{ fontSize: 12, fontWeight: 400 }}>
+                          <span style={{ color: 'var(--clay-dark)' }}>Удалить «{slide.label}»? Действие нельзя отменить.</span>
+                          <button className="pp-btn" style={{ padding: '4px 10px', color: 'var(--clay-dark)' }} onClick={() => removeSlide(slide.id)}>Удалить</button>
+                          <button className="pp-btn" style={{ padding: '4px 10px' }} onClick={() => setConfirmRemove(null)}>Отмена</button>
+                        </span>
+                      ) : (
+                        <button className="pp-btn-ghost" aria-label="Удалить слайд" onClick={() => setConfirmRemove(slide.id)}>
+                          <Trash2 size={14} aria-hidden="true" style={{ color: 'var(--clay-dark)' }} />
+                        </button>
+                      )
+                    )}
                   </div>
-                  <div className="p-2 flex items-center justify-between">
-                    <span className="text-xs pp-muted">{type.label}</span>
-                    <button className="pp-btn-ghost" onClick={() => onRegenItem(line.id, s, type.key)} aria-label={`Перегенерировать ${type.label} для ${s}`}>
-                      <RotateCcw size={13} aria-hidden="true" />
+
+                  <label className="pp-label">Описание слайда</label>
+                  <textarea
+                    className="pp-textarea"
+                    rows={3}
+                    placeholder="Что должно быть на слайде (например: инфографика с размерами молда на фоне шаблона)"
+                    value={slide.description || ''}
+                    onChange={(e) => { updateSlide(slide.id, { description: e.target.value }); if (e.target.value.trim()) setDescError((x) => ({ ...x, [slide.id]: false })); }}
+                  />
+
+                  <div className="flex items-center gap-3 mt-2 mb-3 flex-wrap">
+                    <button className="pp-btn" disabled={descEmpty || promptBusy[slide.id]} onClick={() => genPrompt(slide)}>
+                      {promptBusy[slide.id]
+                        ? <><Loader2 size={14} aria-hidden="true" style={{ animation: 'pp-spin 1s linear infinite' }} /> Генерирую промпт…</>
+                        : 'Сгенерировать промпт'}
                     </button>
+                    {descError[slide.id] && <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--clay-dark)' }}>Заполните описание перед генерацией промпта.</span>}
+                    {promptError[slide.id] && <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--clay-dark)' }}>{promptError[slide.id]}</span>}
                   </div>
+
+                  <label className="pp-label">Промпт для генерации (можно править)</label>
+                  <textarea
+                    className="pp-textarea pp-mono"
+                    rows={5}
+                    readOnly={!hasPrompt}
+                    placeholder="Промпт появится здесь после нажатия «Сгенерировать промпт»"
+                    value={slide.generatedPrompt || ''}
+                    onChange={(e) => updateSlide(slide.id, { generatedPrompt: e.target.value })}
+                    style={!hasPrompt ? { color: 'var(--muted)', background: 'var(--paper)' } : undefined}
+                  />
                 </div>
               );
             })}
+
+            <div className="pp-card rounded-lg p-4">
+              <label className="pp-label">Общие правки для критика (необязательно)</label>
+              <textarea className="pp-textarea" rows={2} value={feedbackSuffix} onChange={(e) => setFeedbackSuffix(e.target.value)} />
+            </div>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              <button className="pp-btn" onClick={addSlide}>
+                <Plus size={14} aria-hidden="true" /> Добавить слайд
+              </button>
+              <button className="pp-btn pp-btn-primary" disabled={saving} onClick={saveConfig}>
+                {saving ? 'Сохраняю…' : 'Сохранить'}
+              </button>
+            </div>
           </div>
-        </div>
-      ))}
-      {!imgMeta && <p className="text-sm pp-muted">Изображения ещё не генерировались. Нажмите «Перегенерировать».</p>}
+        )}
+      </section>
+
+      {/* Result grid */}
+      <div className="flex flex-col gap-4">
+        {line.sizes.map((s) => (
+          <div key={s} className="pp-card rounded-lg p-4">
+            <div className="pp-mono text-xs px-2 py-0.5 rounded-md bg-lavender-soft text-lavender-dark inline-block mb-3">{s}</div>
+            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
+              {IMAGE_TYPES.map((type) => {
+                const url  = imgUrl(s, type.key);
+                const meta = done[`${s}_${type.key}`];
+                return (
+                  <div key={type.key} className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--line)' }}>
+                    <div className="relative" style={{ aspectRatio: '1', background: 'var(--paper)' }}>
+                      {url
+                        ? <img src={url} alt={`${s} ${type.label}`} className="w-full h-full object-cover" />
+                        : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={24} className="pp-muted" aria-hidden="true" /></div>
+                      }
+                      {meta?.needsReview && <span className="absolute top-1 right-1 text-xs bg-yellow-100 text-yellow-800 px-1 rounded">проверить</span>}
+                    </div>
+                    <div className="p-2 flex items-center justify-between">
+                      <span className="text-xs pp-muted">{type.label}</span>
+                      <button className="pp-btn-ghost" onClick={() => onRegenItem(line.id, s, type.key)} aria-label={`Перегенерировать ${type.label} для ${s}`}>
+                        <RotateCcw size={13} aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        {!imgMeta && <p className="text-sm pp-muted">Изображения ещё не генерировались. Нажмите «Перегенерировать».</p>}
+      </div>
     </div>
   );
 }
@@ -884,7 +1040,7 @@ export default function PipelineApp() {
     switch (activeStep) {
       case 'normalize': return <NormalizeView line={line} manifest={manifests[activeLineId]} />;
       case 'texts': return <TextsView line={line} manifest={manifests[activeLineId]} />;
-      case 'images': return <ImagesView line={line} manifest={manifests[activeLineId]} onRegenItem={handleRegenerateItem} />;
+      case 'images': return <ImagesView line={line} manifest={manifests[activeLineId]} onRegenItem={handleRegenerateItem} showToast={showToast} />;
       case 'video': return <VideoView line={line} manifest={manifests[activeLineId]} onRegenItem={handleRegenerateItem} />;
       case 'excel': return <ExcelView line={line} manifest={manifests[activeLineId]} />;
       case 'assemble': return <AssembleView line={line} manifest={manifests[activeLineId]} />;
