@@ -14,6 +14,9 @@ delete process.env.OPENAI_API_KEY;
 const { handler: apiHandler } = require('../functions/api/index.js');
 const stepImages = require('../functions/step-images/index.js');
 const { handler } = stepImages;
+// Seed slidesConfig directly into the manifest (Plan 02 D-02) — isolates
+// step-images from Plan 01's API routes. Same module step-images loads internally.
+const store = require('../layers/shared/versionStore');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -186,6 +189,81 @@ test('D-09: buildEditRequest prompt has no unresolved {{...}}, no faceSize, no u
     `prompt must not contain the literal word "faceSize": ${req.prompt}`);
   assert.ok(!req.prompt.includes('undefined'),
     `prompt must not contain "undefined": ${req.prompt}`);
+});
+
+// ---------------------------------------------------------------------------
+// D-02-source: buildEditRequest sources the base prompt from slidesConfig
+// (NOT the on-disk template) and appends the per-size dimensions.
+// ---------------------------------------------------------------------------
+
+test('D-02-source: buildEditRequest uses slidesConfig.generatedPrompt + appends per-size dimensions', async () => {
+  const article = 'IMGD02S';
+  await createLine(article, 'hands');
+
+  // Seed a per-article slidesConfig whose infographic prompt carries a marker
+  // string that never appears in the on-disk default template.
+  await store.updateManifest(article, '03-images', {
+    slidesConfig: {
+      feedbackSuffix: '',
+      slides: [
+        { id: 'infographic', label: 'x', description: 'd',
+          generatedPrompt: 'DISTINCTMARKER prompt text', files: [], default: true },
+      ],
+    },
+  });
+
+  const sizeRecord = readSizeRecord(article, 'M');
+  const req = await stepImages.buildEditRequest(article, sizeRecord, 'infographic', []);
+
+  assert.ok(req.prompt.includes('DISTINCTMARKER prompt text'),
+    `prompt must be sourced from slidesConfig.generatedPrompt, got: ${req.prompt}`);
+  assert.ok(req.prompt.includes(String(sizeRecord.moldSize)),
+    `prompt must append the per-size mold size ${sizeRecord.moldSize}, got: ${req.prompt}`);
+  assert.ok(req.prompt.includes(String(sizeRecord.moldLength)),
+    `prompt must append the per-size length ${sizeRecord.moldLength}, got: ${req.prompt}`);
+});
+
+// ---------------------------------------------------------------------------
+// D-02-fallback: no slidesConfig → default prompt path, no unresolved {{...}}.
+// ---------------------------------------------------------------------------
+
+test('D-02-fallback: buildEditRequest without slidesConfig returns default prompt, no {{...}}', async () => {
+  const article = 'IMGD02F';
+  await createLine(article, 'hands');
+
+  const sizeRecord = readSizeRecord(article, 'M');
+  const req = await stepImages.buildEditRequest(article, sizeRecord, 'infographic', []);
+
+  assert.ok(req && typeof req.prompt === 'string' && req.prompt.length > 0,
+    `buildEditRequest must return a non-empty prompt, got: ${JSON.stringify(req)}`);
+  assert.ok(!/\{\{[^}]+\}\}/.test(req.prompt),
+    `default-path prompt must have no unresolved placeholders: ${req.prompt}`);
+});
+
+// ---------------------------------------------------------------------------
+// custom-slide: buildEditRequest resolves a custom-* slide from slidesConfig
+// without any template lookup and does not throw.
+// ---------------------------------------------------------------------------
+
+test('custom-slide: buildEditRequest resolves a custom-* slide prompt without a template read', async () => {
+  const article = 'IMGCUST';
+  await createLine(article, 'hands');
+
+  await store.updateManifest(article, '03-images', {
+    slidesConfig: {
+      feedbackSuffix: '',
+      slides: [
+        { id: 'custom-abc', label: 'Custom', description: 'd',
+          generatedPrompt: 'CUSTOMMARKER', files: [], default: false },
+      ],
+    },
+  });
+
+  const sizeRecord = readSizeRecord(article, 'M');
+  const req = await stepImages.buildEditRequest(article, sizeRecord, 'custom-abc', []);
+
+  assert.ok(req.prompt.includes('CUSTOMMARKER'),
+    `custom-slide prompt must come from slidesConfig, got: ${req.prompt}`);
 });
 
 // ---------------------------------------------------------------------------
