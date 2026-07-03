@@ -148,3 +148,47 @@ Plans:
 | 3. Working Images Step | 3/3 | Complete   | 2026-06-22 |
 | 4. Connected Frontend | 3/3 | Complete   | 2026-06-22 |
 | 5. E2E Validation | 1/1 | Complete   | 2026-06-23 |
+
+## Backlog
+
+### Phase 999.1: Editable image prompts with save to config (BACKLOG)
+
+**Goal:** Перед запуском генерации изображений пользователь может редактировать промпты прямо в UI — изменения сохраняются в `prompts.images.json` и используются в следующей генерации
+**Requirements:** TBD
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (promote with /gsd-review-backlog when ready)
+
+---
+
+### Phase 999.2: UX improvements from product review (BACKLOG)
+
+**Goal:** Устранить UX-замечания выявленные после первого реального прогона pipeline (навигация, состояния загрузки, сообщения об ошибках, мобильная адаптация и прочее)
+**Requirements:** TBD
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (promote with /gsd-review-backlog when ready)
+
+---
+
+### Phase 999.3: Delete product lines (BACKLOG)
+
+**Goal:** Пользователь может удалить линейку товара из UI — манифест и все артефакты удаляются из хранилища (cloud и local fallback)
+**Requirements:** TBD
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (promote with /gsd-review-backlog when ready)
+
+---
+
+### Phase 999.4: Edit and save existing product lines (BACKLOG)
+
+**Goal:** Пользователь может отредактировать данные существующей линейки (опросник, тексты, мастер-данные) и сохранить изменения с сохранением версионирования
+**Requirements:** TBD
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (promote with /gsd-review-backlog when ready)
