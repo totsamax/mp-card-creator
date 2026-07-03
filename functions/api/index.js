@@ -640,27 +640,35 @@ async function loadSizeRecord(article) {
 async function generatePrompt(description, sizeRecord) {
   const apiKey = process.env.OPENAI_API_KEY;
   const ctx = sizeRecord || {};
-  if (!apiKey) {
+
+  function templatePrompt() {
     const bits = [ctx.moldName, ctx.color].filter(Boolean).join(', ');
     return `Product marketplace slide. ${description}${bits ? ` (${bits})` : ''}. White background, studio lighting, sharp focus, high-contrast, professional.`;
   }
 
+  if (!apiKey) return templatePrompt();
+
   const contextLine = `Context — moldName: ${ctx.moldName || ''}, color: ${ctx.color || ''}, moldSize: ${ctx.moldSize || ''} cm, dimensions ${ctx.moldLength || ''}×${ctx.moldWidth || ''}×${ctx.moldHeight || ''} cm.`;
-  const res = await fetch(`${OPENAI_BASE}/chat/completions`, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model:      OPENAI_MODEL,
-      max_tokens: 400,
-      messages: [
-        { role: 'system', content: 'You write concise image-generation prompts for the gpt-image-2 API for product marketplace slides. Output only the prompt, no explanation. Language: English.' },
-        { role: 'user',   content: `${description}\n\n${contextLine}` },
-      ],
-    }),
-  });
-  if (!res.ok) throw new Error(`chat/completions ${res.status}: ${await res.text().catch(() => '')}`);
-  const data = await res.json();
-  return data.choices[0].message.content.trim();
+  try {
+    const res = await fetch(`${OPENAI_BASE}/chat/completions`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model:      OPENAI_MODEL,
+        max_tokens: 400,
+        messages: [
+          { role: 'system', content: 'You write concise image-generation prompts for the gpt-image-2 API for product marketplace slides. Output only the prompt, no explanation. Language: English.' },
+          { role: 'user',   content: `${description}\n\n${contextLine}` },
+        ],
+      }),
+    });
+    if (!res.ok) throw new Error(`chat/completions ${res.status}: ${await res.text().catch(() => '')}`);
+    const data = await res.json();
+    return data.choices[0].message.content.trim();
+  } catch (err) {
+    console.warn('[api] generatePrompt LLM unavailable, using template fallback:', err.message.slice(0, 120));
+    return templatePrompt();
+  }
 }
 
 /** POST /lines/:id/slides/:slideId/generate-prompt (D-07/D-11). */
