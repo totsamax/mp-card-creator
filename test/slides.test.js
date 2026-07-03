@@ -11,6 +11,11 @@ process.env.SHARED_LAYER_PATH = path.join(__dirname, '../layers/shared');
 // gated on `!process.env.OPENAI_API_KEY`; deleting it keeps every test offline.
 delete process.env.OPENAI_API_KEY;
 
+// Hermetic runs: clear any leftover local store from prior runs. The fixed
+// article ids below are reused across runs, and the round-trip test (D-10)
+// reads the current config and appends — it needs a clean baseline each run.
+try { fs.rmSync(process.env.OUTPUT_DIR, { recursive: true, force: true }); } catch { /* ok */ }
+
 const { handler: apiHandler } = require('../functions/api/index.js');
 
 // ---------------------------------------------------------------------------

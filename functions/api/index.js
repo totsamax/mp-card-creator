@@ -173,9 +173,10 @@ exports.handler = async (event) => {
     }
 
     // GET /lines/:id/steps/:step/artifacts/:name[?version=N]
-    const artifactMatch = rest.match(/^\/steps\/([^/]+)\/artifacts\/([^/]+)$/);
+    // Name group is (.+) so nested slide-files keys ({slideId}/{filename}) resolve.
+    const artifactMatch = rest.match(/^\/steps\/([^/]+)\/artifacts\/(.+)$/);
     if (method === 'GET' && artifactMatch) {
-      return await handleGetArtifact(article, artifactMatch[1], artifactMatch[2], query);
+      return await handleGetArtifact(article, artifactMatch[1], decodeURIComponent(artifactMatch[2]), query);
     }
 
     // POST /lines/:id/steps/:step/regenerate
@@ -605,6 +606,140 @@ async function handleSaveSlides(article, event) {
     },
   });
   return respond(200, { saved: true, slides });
+}
+
+// ---------------------------------------------------------------------------
+// Slide generate-prompt / regenerate / file-upload handlers (999.1, Task 3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Load the M-size record (or the first row) from the current 01-normalize
+ * master-data.json — used as generation context for generatePrompt.
+ * Returns {} when unavailable (never throws).
+ */
+async function loadSizeRecord(article) {
+  try {
+    const manifest = await store.getManifest(article);
+    const normMeta = manifest?.steps?.['01-normalize'];
+    if (!normMeta?.currentVersion) return {};
+    const buf  = await store.getArtifact(article, '01-normalize', normMeta.currentVersion, 'master-data.json');
+    const data = JSON.parse(buf.toString());
+    return data.find(r => r.size === 'M') || data[0] || {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * generatePrompt(description, sizeRecord) — turn a Russian description into an
+ * English gpt-image-2 prompt. With no OPENAI_API_KEY it returns a deterministic
+ * stub and NEVER throws (mirrors step-images runCritic's no-key posture, not
+ * generateImage's throw). The description is untrusted user content placed in the
+ * user role; the system prompt is fixed (T-999.1-03 prompt-injection mitigation).
+ */
+async function generatePrompt(description, sizeRecord) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  const ctx = sizeRecord || {};
+  if (!apiKey) {
+    const bits = [ctx.moldName, ctx.color].filter(Boolean).join(', ');
+    return `Product marketplace slide. ${description}${bits ? ` (${bits})` : ''}. White background, studio lighting, sharp focus, high-contrast, professional.`;
+  }
+
+  const contextLine = `Context — moldName: ${ctx.moldName || ''}, color: ${ctx.color || ''}, moldSize: ${ctx.moldSize || ''} cm, dimensions ${ctx.moldLength || ''}×${ctx.moldWidth || ''}×${ctx.moldHeight || ''} cm.`;
+  const res = await fetch(`${OPENAI_BASE}/chat/completions`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model:      OPENAI_MODEL,
+      max_tokens: 400,
+      messages: [
+        { role: 'system', content: 'You write concise image-generation prompts for the gpt-image-2 API for product marketplace slides. Output only the prompt, no explanation. Language: English.' },
+        { role: 'user',   content: `${description}\n\n${contextLine}` },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`chat/completions ${res.status}: ${await res.text().catch(() => '')}`);
+  const data = await res.json();
+  return data.choices[0].message.content.trim();
+}
+
+/** POST /lines/:id/slides/:slideId/generate-prompt (D-07/D-11). */
+async function handleGeneratePrompt(article, slideId, event) {
+  if (!SLIDE_ID_RE.test(slideId)) return respond(400, { error: 'Invalid slideId' });
+
+  let body;
+  try {
+    const raw = event.isBase64Encoded
+      ? Buffer.from(event.body, 'base64').toString('utf8')
+      : event.body;
+    body = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  } catch {
+    return respond(400, { error: 'Invalid JSON body' });
+  }
+
+  const description = body && typeof body.description === 'string' ? body.description.trim() : '';
+  if (!description) return respond(400, { error: 'description required' });
+
+  const sizeRecord      = await loadSizeRecord(article);
+  const generatedPrompt = await generatePrompt(description, sizeRecord);
+  await patchSlide(article, slideId, { description, generatedPrompt });
+  return respond(200, { slideId, generatedPrompt });
+}
+
+/**
+ * POST /lines/:id/slides/:slideId/regenerate (D-08/D-12) — enqueue single-slide
+ * 03-images generation for all five sizes, carrying slideId. Fire-and-forget;
+ * Plan 02 makes step-images slide-aware. Leaves all other steps untouched.
+ */
+async function handleSlideRegenerate(article, slideId, event) {
+  if (!SLIDE_ID_RE.test(slideId)) return respond(400, { error: 'Invalid slideId' });
+
+  const manifest   = await store.getManifest(article);
+  const runVersion = manifest?.steps?.['03-images']?.currentVersion ?? 1;
+  const messages   = SIZES.map(size => ({ article, size, slideId, attempt: 1, force: true, runVersion }));
+  await runLocally('03-images', messages);
+  return respond(202, { queued: true, article, stepId: '03-images', slideId, count: messages.length });
+}
+
+/**
+ * POST /lines/:id/slides/:slideId/files (D-09) — multipart reference-file upload.
+ * Accepts arbitrary reference files (photos, templates); the busboy 15 MB/10-file
+ * limit, filename sanitisation, and octet-stream fallback in handleGetArtifact are
+ * the mitigations (T-999.1-01/02) — no image-only magic-byte gate here.
+ */
+async function handleSlideFileUpload(article, slideId, event) {
+  if (!SLIDE_ID_RE.test(slideId)) return respond(400, { error: 'Invalid slideId' });
+
+  if (!event.files) {
+    const parsed = await parseMultipartEvent(event).catch(() => null);
+    if (parsed) {
+      event.files      = parsed.files;
+      event.formFields = parsed.formFields;
+    }
+  }
+  if (!event.files || event.files.length === 0) {
+    return respond(400, { error: 'No files uploaded' });
+  }
+
+  const refs = [];
+  for (const f of event.files) {
+    const safeName = path.basename(f.filename || '').replace(/[^a-zA-Z0-9._-]/g, '_');
+    if (!safeName || /^\.+$/.test(safeName) || !/[a-zA-Z0-9]/.test(safeName)) {
+      return respond(400, { error: 'Invalid filename in upload' });
+    }
+    await store.putArtifact(article, 'slide-files', 1, `${slideId}/${safeName}`, f.buffer);
+    refs.push(`/lines/${article}/steps/slide-files/artifacts/${slideId}/${safeName}`);
+  }
+
+  // Register the slide-files pseudo-step so handleGetArtifact can resolve the blob
+  // (putArtifact does not touch the manifest; getArtifact 404s without a step entry).
+  await store.updateManifest(article, 'slide-files', { currentVersion: 1 });
+
+  const config   = await readSlidesConfig(article);
+  const slide    = config.slides.find(s => s.id === slideId);
+  const existing = slide && Array.isArray(slide.files) ? slide.files : [];
+  await patchSlide(article, slideId, { files: [...existing, ...refs] });
+  return respond(200, { slideId, refs, ref: refs[0] });
 }
 
 // ---------------------------------------------------------------------------
