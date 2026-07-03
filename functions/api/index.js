@@ -6,11 +6,23 @@ const SHARED = process.env.SHARED_LAYER_PATH || path.resolve(__dirname, '../../l
 
 const store    = require(path.join(SHARED, 'versionStore'));
 const template = require(path.join(SHARED, 'config/template.master.json'));
+const promptsImages = require(path.join(SHARED, 'config/prompts.images.json'));
 const { computeMasterData } = require(path.join(SHARED, 'templateEngine'));
 
 const SIZES       = ['XS', 'S', 'M', 'L', 'XL'];
 const IMAGE_TYPES = ['main', 'infographic', 'scale', 'lifestyle'];
 const VIDEO_TYPES = ['turntable', 'detail', 'lifestyle'];
+
+// Slide-config (999.1) — LLM/text config sourced from step-texts pattern.
+const OPENAI_BASE  = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const SLIDE_ID_RE  = /^[a-zA-Z0-9_-]{1,64}$/;
+const DEFAULT_SLIDE_LABELS = {
+  main:        'Главное фото',
+  infographic: 'Инфографика с размерами',
+  scale:       'Масштаб с игрушкой',
+  lifestyle:   'Лайфстайл',
+};
 
 const STEP_QUEUES = {
   '02-texts':  () => process.env.YMQ_TEXTS_QUEUE_URL,
@@ -121,6 +133,31 @@ exports.handler = async (event) => {
       return respond(400, { error: 'Invalid article identifier' });
     }
     const rest    = lineMatch[2] || '';
+
+    // --- Slide-config routes (999.1) ---
+    // GET  /lines/:id/slides                          → seeded defaults or stored config
+    // POST /lines/:id/slides                          → persist whole slidesConfig
+    // POST /lines/:id/slides/:slideId/generate-prompt → inline LLM prompt (stub offline)
+    // POST /lines/:id/slides/:slideId/regenerate      → enqueue single-slide 03-images
+    // POST /lines/:id/slides/:slideId/files           → multipart reference-file upload
+    if (method === 'GET' && rest === '/slides') {
+      return await handleGetSlides(article);
+    }
+    if (method === 'POST' && rest === '/slides') {
+      return await handleSaveSlides(article, event);
+    }
+    const genPromptMatch = rest.match(/^\/slides\/([^/]+)\/generate-prompt$/);
+    if (method === 'POST' && genPromptMatch) {
+      return await handleGeneratePrompt(article, decodeURIComponent(genPromptMatch[1]), event);
+    }
+    const slideRegenMatch = rest.match(/^\/slides\/([^/]+)\/regenerate$/);
+    if (method === 'POST' && slideRegenMatch) {
+      return await handleSlideRegenerate(article, decodeURIComponent(slideRegenMatch[1]), event);
+    }
+    const slideFilesMatch = rest.match(/^\/slides\/([^/]+)\/files$/);
+    if (method === 'POST' && slideFilesMatch) {
+      return await handleSlideFileUpload(article, decodeURIComponent(slideFilesMatch[1]), event);
+    }
 
     // GET /lines/:id/manifest
     if (method === 'GET' && rest === '/manifest') {
@@ -482,6 +519,92 @@ async function handleRegenerate(article, stepId, event, item) {
   }
 
   return respond(400, { error: `Cannot regenerate step "${stepId}" via this endpoint. For 01-normalize use POST /lines with force:true` });
+}
+
+// ---------------------------------------------------------------------------
+// Slide-config handlers (999.1)
+// ---------------------------------------------------------------------------
+
+/**
+ * buildDefaultSlides() — seed the 4 default slides from prompts.images.json.
+ * prompts.images.json stays the read-only defaults source (D-02); this never
+ * writes back to it. feedbackSuffix is carried at config level (D-06).
+ */
+function buildDefaultSlides() {
+  return {
+    feedbackSuffix: promptsImages.feedbackSuffix,
+    slides: promptsImages.imageTypes.map(id => ({
+      id,
+      label:           DEFAULT_SLIDE_LABELS[id] || id,
+      description:     promptsImages.descriptions[id],
+      generatedPrompt: promptsImages.prompts[id],
+      files:           [],
+      default:         true,
+    })),
+  };
+}
+
+/** Read the stored slidesConfig for an article, or the seeded defaults. */
+async function readSlidesConfig(article) {
+  const manifest = await store.getManifest(article);
+  return manifest?.steps?.['03-images']?.slidesConfig || buildDefaultSlides();
+}
+
+/**
+ * patchSlide(article, slideId, patch) — read-modify-write a single slide.
+ * Reads the current slidesConfig (or defaults), replaces the slide whose
+ * id === slideId with { ...slide, ...patch }, writes the whole array back,
+ * and returns the updated slide.
+ */
+async function patchSlide(article, slideId, patch) {
+  const config = await readSlidesConfig(article);
+  let updated = null;
+  const slides = config.slides.map(s => {
+    if (s.id !== slideId) return s;
+    updated = { ...s, ...patch };
+    return updated;
+  });
+  await store.updateManifest(article, '03-images', {
+    slidesConfig: { feedbackSuffix: config.feedbackSuffix, slides },
+  });
+  return updated;
+}
+
+/** GET /lines/:id/slides — seeded defaults when no slidesConfig is stored (D-03/D-10). */
+async function handleGetSlides(article) {
+  return respond(200, await readSlidesConfig(article));
+}
+
+/** POST /lines/:id/slides — persist the whole slidesConfig in one write (D-10). */
+async function handleSaveSlides(article, event) {
+  let body;
+  try {
+    const raw = event.isBase64Encoded
+      ? Buffer.from(event.body, 'base64').toString('utf8')
+      : event.body;
+    body = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  } catch {
+    return respond(400, { error: 'Invalid JSON body' });
+  }
+
+  const { feedbackSuffix, slides } = body || {};
+  if (!Array.isArray(slides)) {
+    return respond(400, { error: 'slides must be an array' });
+  }
+  for (const s of slides) {
+    if (!s || typeof s.id !== 'string' || !SLIDE_ID_RE.test(s.id)) {
+      return respond(400, { error: `Invalid slide id: ${JSON.stringify(s && s.id)}` });
+    }
+  }
+
+  // deepMerge replaces the array wholesale — correct for a full save.
+  await store.updateManifest(article, '03-images', {
+    slidesConfig: {
+      feedbackSuffix: typeof feedbackSuffix === 'string' ? feedbackSuffix : promptsImages.feedbackSuffix,
+      slides,
+    },
+  });
+  return respond(200, { saved: true, slides });
 }
 
 // ---------------------------------------------------------------------------

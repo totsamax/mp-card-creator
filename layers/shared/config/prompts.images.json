@@ -6,5 +6,11 @@
     "scale": "Silicone mold «{{moldName}}» ({{moldSize}} cm, {{color}}) placed next to a finished cotton wool doll showing the scale. The doll should be approximately {{toyFrom}}–{{toyTo}} cm tall. Warm crafting studio background.",
     "lifestyle": "Lifestyle flat lay: silicone mold «{{moldName}}» in {{color}} surrounded by crafting supplies — cotton wool, acrylic paints, brushes. Warm natural light, wooden table, cozy creative atmosphere."
   },
-  "feedbackSuffix": " Previous attempt was rejected. Issues to fix: {{issues}}"
+  "feedbackSuffix": " Previous attempt was rejected. Issues to fix: {{issues}}",
+  "descriptions": {
+    "main": "Главное фото молда на белом фоне, студийный свет, акцент на рельефе.",
+    "infographic": "Инфографика с фото молда на фоне шаблона, с размерами и названием молда.",
+    "scale": "Молд рядом с готовой игрушкой для показа масштаба.",
+    "lifestyle": "Лайфстайл: молд в окружении материалов для творчества."
+  }
 }
