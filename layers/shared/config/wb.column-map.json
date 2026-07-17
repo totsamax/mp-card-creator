@@ -10,7 +10,7 @@
     { "header": "Ширина предмета (см)",          "field": "moldWidth" },
     { "header": "Высота предмета (см)",          "field": "moldHeight" },
     { "header": "Вес товара с упаковкой (г)",   "field": "weightPacked" },
-    { "header": "Розничная цена",               "field": "priceBase" },
+    { "header": "Розничная цена",               "field": "priceDiscount" },
     { "header": "Цена до скидки",               "field": "priceBase" },
     { "header": "Ваша цена",                    "field": "priceDiscount" },
     { "header": "Предмет",                      "field": "type" },
