@@ -997,6 +997,8 @@ export default function PipelineApp() {
   const [listError, setListError]   = useState(null);
   const [listLoading, setListLoading] = useState(true);
   const [runningSteps, setRunningSteps] = useState({}); // `${lineId}.${stepKey}` → true (optimistic running, D-02)
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput]     = useState('');
 
   // Fetch lines list on mount
   useEffect(() => {
@@ -1093,6 +1095,20 @@ export default function PipelineApp() {
       await apiFetch(`/lines/${lineId}/steps/${stepId}/items/${item}/regenerate`, { method: 'POST', body: JSON.stringify({ force: true }) });
     } catch (err) {
       showToast(`Ошибка: ${err.message}`);
+    }
+  };
+
+  const renameLine = async (id, name) => {
+    await apiFetch(`/lines/${id}/rename`, { method: 'POST', body: JSON.stringify({ name }) });
+    setLines(prev => prev.map(l => l.id === id ? { ...l, name } : l));
+  };
+
+  const saveLineName = async () => {
+    const trimmed = nameInput.trim();
+    setEditingName(false);
+    if (trimmed && line && trimmed !== line.name) {
+      try { await renameLine(line.id, trimmed); }
+      catch { showToast('Не удалось сохранить название'); }
     }
   };
 
@@ -1205,7 +1221,24 @@ export default function PipelineApp() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="pp-display text-2xl" style={{ fontWeight: 500 }}>{line.name}</h1>
+                {editingName ? (
+                  <input
+                    autoFocus
+                    className="pp-display text-2xl"
+                    style={{ fontWeight: 500, background: 'transparent', border: 'none', borderBottom: '2px solid var(--lavender)', outline: 'none', minWidth: 120, padding: '0 2px' }}
+                    value={nameInput}
+                    onChange={e => setNameInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') saveLineName(); if (e.key === 'Escape') setEditingName(false); }}
+                    onBlur={saveLineName}
+                  />
+                ) : (
+                  <h1
+                    className="pp-display text-2xl"
+                    style={{ fontWeight: 500, cursor: 'text' }}
+                    title="Нажмите для переименования"
+                    onClick={() => { setNameInput(line.name); setEditingName(true); }}
+                  >{line.name}</h1>
+                )}
                 <span className="pp-mono text-sm pp-muted">{line.id}</span>
                 <SizeLadder sizes={line.sizes} dim={5} />
               </div>

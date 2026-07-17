@@ -159,6 +159,11 @@ exports.handler = async (event) => {
       return await handleSlideFileUpload(article, decodeURIComponent(slideFilesMatch[1]), event);
     }
 
+    // POST /lines/:id/rename
+    if (method === 'POST' && rest === '/rename') {
+      return await handleRenameLine(article, event);
+    }
+
     // GET /lines/:id/manifest
     if (method === 'GET' && rest === '/manifest') {
       const manifest = await store.getManifest(article);
@@ -212,15 +217,16 @@ async function handleListLines() {
     const manifest = await store.getManifest(article);
     if (!manifest) return null;
 
-    const normMeta = manifest.steps?.['01-normalize'];
-    let lineInfo = { id: article, article, steps: Object.keys(manifest.steps || {}) };
+    const normMeta    = manifest.steps?.['01-normalize'];
+    const displayName = manifest.steps?.['_meta']?.displayName;
+    let lineInfo = { id: article, article, steps: Object.keys(manifest.steps || {}).filter(s => s !== '_meta') };
 
     if (normMeta?.currentVersion) {
       try {
         const buf  = await store.getArtifact(article, '01-normalize', normMeta.currentVersion, 'master-data.json');
         const data = JSON.parse(buf.toString());
         const mRow = data[0] || {};
-        lineInfo.moldName = mRow.moldName;
+        lineInfo.moldName = displayName || mRow.moldName;
         lineInfo.brand    = mRow.brand;
         lineInfo.sizes    = data.map(r => r.size);
       } catch { /* ok */ }
@@ -229,6 +235,23 @@ async function handleListLines() {
   }));
 
   return respond(200, { lines: lines.filter(Boolean) });
+}
+
+async function handleRenameLine(article, event) {
+  let body = {};
+  if (event.body) {
+    try {
+      const raw = event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString('utf8') : event.body;
+      body = JSON.parse(raw);
+    } catch { /* ignore */ }
+  }
+  const name = (body?.name || '').trim();
+  if (!name) return respond(400, { error: 'name is required' });
+  if (name.length > 200) return respond(400, { error: 'name too long (max 200)' });
+  const manifest = await store.getManifest(article);
+  if (!manifest) return respond(404, { error: `Article "${article}" not found` });
+  await store.updateManifest(article, '_meta', { displayName: name });
+  return respond(200, { ok: true, name });
 }
 
 // Parse multipart/form-data from a raw event body (for cloud YC Functions runtime).
