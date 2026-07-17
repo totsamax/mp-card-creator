@@ -1244,6 +1244,16 @@ export default function PipelineApp() {
               </div>
               <p className="text-sm pp-muted mt-1">{line.theme} · {line.color}</p>
             </div>
+            <div className="flex items-center gap-2">
+              <a
+                href={`/lines/${line.id}/download`}
+                download={`${line.id}.zip`}
+                title="Скачать все артефакты"
+                className="pp-btn pp-btn-ghost text-sm flex items-center gap-1"
+                style={{ padding: '6px 10px' }}
+              >
+                <Download size={14} /> Скачать всё
+              </a>
             <div className="flex gap-1 pp-line border rounded-lg p-1">
               <button
                 onClick={() => setActiveTab('results')}
@@ -1259,6 +1269,7 @@ export default function PipelineApp() {
               >
                 Опросник
               </button>
+            </div>
             </div>
           </div>
 

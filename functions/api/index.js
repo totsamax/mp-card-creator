@@ -159,6 +159,11 @@ exports.handler = async (event) => {
       return await handleSlideFileUpload(article, decodeURIComponent(slideFilesMatch[1]), event);
     }
 
+    // GET /lines/:id/download — zip of all artifacts
+    if (method === 'GET' && rest === '/download') {
+      return await handleDownload(article);
+    }
+
     // POST /lines/:id/rename
     if (method === 'POST' && rest === '/rename') {
       return await handleRenameLine(article, event);
@@ -252,6 +257,52 @@ async function handleRenameLine(article, event) {
   if (!manifest) return respond(404, { error: `Article "${article}" not found` });
   await store.updateManifest(article, '_meta', { displayName: name });
   return respond(200, { ok: true, name });
+}
+
+async function handleDownload(article) {
+  const manifest = await store.getManifest(article);
+  if (!manifest) return respond(404, { error: `Article "${article}" not found` });
+
+  const archiver = require('archiver');
+
+  const entries = [
+    { name: `${article}/manifest.json`, data: Buffer.from(JSON.stringify(manifest, null, 2)) },
+  ];
+
+  const steps = Object.keys(manifest.steps || {}).filter(s => s !== '_meta');
+  for (const stepId of steps) {
+    const version = manifest.steps[stepId]?.currentVersion;
+    if (!version) continue;
+    try {
+      const names = await store.listArtifacts(article, stepId, version);
+      for (const name of names) {
+        try {
+          const buf = await store.getArtifact(article, stepId, version, name);
+          entries.push({ name: `${article}/${stepId}/v${version}/${name}`, data: buf });
+        } catch { /* skip missing artifact */ }
+      }
+    } catch { /* skip missing step */ }
+  }
+
+  const zipBuffer = await new Promise((resolve, reject) => {
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    const chunks = [];
+    archive.on('data', c => chunks.push(c));
+    archive.on('end', () => resolve(Buffer.concat(chunks)));
+    archive.on('error', reject);
+    for (const { name, data } of entries) archive.append(data, { name });
+    archive.finalize();
+  });
+
+  return {
+    statusCode: 200,
+    headers: {
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="${article}.zip"`,
+    },
+    body: zipBuffer.toString('base64'),
+    isBase64Encoded: true,
+  };
 }
 
 // Parse multipart/form-data from a raw event body (for cloud YC Functions runtime).

@@ -140,11 +140,10 @@ http.createServer(async (req, res) => {
       console.warn(`[api] ${result.statusCode} ${req.method} ${url.pathname} → ${result.body}`);
     }
 
-    const contentType = result.headers?.['Content-Type'] || 'application/json';
-    res.writeHead(result.statusCode, {
-      'Content-Type': contentType,
-      ...corsHeaders(),
-    });
+    const resultHeaders = result.headers || {};
+    const responseHeaders = { 'Content-Type': resultHeaders['Content-Type'] || 'application/json', ...corsHeaders() };
+    if (resultHeaders['Content-Disposition']) responseHeaders['Content-Disposition'] = resultHeaders['Content-Disposition'];
+    res.writeHead(result.statusCode, responseHeaders);
     if (result.isBase64Encoded && result.body) {
       res.end(Buffer.from(result.body, 'base64'));
     } else {
