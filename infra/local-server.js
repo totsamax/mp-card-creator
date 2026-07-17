@@ -52,7 +52,7 @@ console.log(`[local-server] OPENAI_API_KEY   : ${process.env.OPENAI_API_KEY   ? 
 console.log(`[local-server] OPENAI_BASE_URL  : ${process.env.OPENAI_BASE_URL  || '(not set)'}`);
 console.log(`[local-server] OPENAI_IMAGE_MODEL: ${process.env.OPENAI_IMAGE_MODEL || '(not set, default gpt-image-1)'}`);
 console.log(`[local-server] OPENROUTER_API_KEY: ${process.env.OPENROUTER_API_KEY ? process.env.OPENROUTER_API_KEY.slice(0,6)+'***' : '(not set)'}`);
-console.log(`[local-server] STORE_ADAPTER    : ${process.env.STORE_ADAPTER    || '(not set, default cloud-with-fallback)'}`);
+console.log(`[local-server] STORE_ADAPTER    : ${process.env.STORE_ADAPTER    || '(not set, default yandex-cloud)'}`);
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);

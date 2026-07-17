@@ -2,7 +2,6 @@
 
 const crypto = require('crypto');
 const path   = require('path');
-const fs     = require('fs');
 
 const SHARED       = process.env.SHARED_LAYER_PATH || path.resolve(__dirname, '../../layers/shared');
 const OPENAI_BASE         = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');

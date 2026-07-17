@@ -4,8 +4,8 @@ const fs   = require('fs');
 const path = require('path');
 
 // ---------------------------------------------------------------------------
-// Local adapter — stores manifests as JSON files and artifacts as raw buffers
-// on the local filesystem under OUTPUT_DIR (default: ./output)
+// Local adapter — used only in tests (STORE_ADAPTER=local).
+// Not for production use.
 // ---------------------------------------------------------------------------
 
 const OUTPUT_DIR = process.env.OUTPUT_DIR || path.resolve(process.cwd(), 'output');
@@ -42,7 +42,6 @@ const local = {
 
     const existing = manifest.steps[stepId] || {};
 
-    // pushHistory: atomic append to history array (safe for concurrent writers)
     let resolvedPatch = patch;
     if (patch.pushHistory) {
       existing.history = [...(existing.history || []), patch.pushHistory];
@@ -212,37 +211,16 @@ const yandexCloud = {
 };
 
 // ---------------------------------------------------------------------------
-// cloud-with-fallback adapter — tries yandex-cloud, falls back to local
-// ---------------------------------------------------------------------------
-
-function makeCloudWithFallback() {
-  const methods = ['getManifest', 'updateManifest', 'putArtifact', 'getArtifact', 'listArtifacts', 'listArticles'];
-  const adapter = {};
-  for (const method of methods) {
-    adapter[method] = async (...args) => {
-      try {
-        return await yandexCloud[method](...args);
-      } catch (err) {
-        console.warn(`[versionStore] cloud unavailable (${method}), falling back to local:`, err.message);
-        return local[method](...args);
-      }
-    };
-  }
-  return adapter;
-}
-
-// ---------------------------------------------------------------------------
 // Adapter selection
 // ---------------------------------------------------------------------------
 
 const ADAPTERS = {
   local,
-  'yandex-cloud':        yandexCloud,
-  'cloud-with-fallback': makeCloudWithFallback(),
+  'yandex-cloud': yandexCloud,
 };
 
 function getAdapter() {
-  const name = process.env.STORE_ADAPTER || 'cloud-with-fallback';
+  const name = process.env.STORE_ADAPTER || 'yandex-cloud';
   const adapter = ADAPTERS[name];
   if (!adapter) throw new Error(`Unknown STORE_ADAPTER: "${name}". Valid values: ${Object.keys(ADAPTERS).join(', ')}`);
   return adapter;
