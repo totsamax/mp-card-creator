@@ -6,6 +6,7 @@ frontend/dist
 output/
 logs/
 test/tmp-output/
+test/e2e-output/
 
 # Секреты — не коммитить
 infra/env.sh

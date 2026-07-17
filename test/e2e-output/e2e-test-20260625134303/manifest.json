@@ -1,0 +1,169 @@
+{
+  "article": "e2e-test-20260625134303",
+  "steps": {
+    "01-normalize": {
+      "currentVersion": 1,
+      "history": [
+        {
+          "version": 1,
+          "createdAt": "2026-06-25T13:43:04.214Z",
+          "inputHash": "989b2266f4a70f9448c5254aacd603a0c3f8afceb0f10f4e91e0851404830983",
+          "questionnaire": {
+            "moldType": "face",
+            "moldName": "Василиса",
+            "brand": "ТопМолд",
+            "theme": "Кукольное лицо",
+            "color": "Телесный",
+            "priceBaseM": 1200,
+            "sizes": [
+              {
+                "size": "XS",
+                "moldSize": 50,
+                "moldLength": 5,
+                "moldWidth": 4,
+                "moldHeight": 1.5,
+                "moldWeight": 80
+              },
+              {
+                "size": "S",
+                "moldSize": 65,
+                "moldLength": 6.5,
+                "moldWidth": 5.2,
+                "moldHeight": 1.8,
+                "moldWeight": 110
+              },
+              {
+                "size": "M",
+                "moldSize": 80,
+                "moldLength": 8,
+                "moldWidth": 6.3,
+                "moldHeight": 2,
+                "moldWeight": 145
+              },
+              {
+                "size": "L",
+                "moldSize": 95,
+                "moldLength": 9.5,
+                "moldWidth": 7.4,
+                "moldHeight": 2.2,
+                "moldWeight": 185
+              },
+              {
+                "size": "XL",
+                "moldSize": 110,
+                "moldLength": 11,
+                "moldWidth": 8.5,
+                "moldHeight": 2.5,
+                "moldWeight": 230
+              }
+            ],
+            "photos": [
+              "/lines/e2e-test-20260625134303/steps/photos/artifacts/e2e-face-mold.png"
+            ],
+            "artifacts": [
+              "images",
+              "excel-ozon",
+              "excel-wb"
+            ],
+            "article": "e2e-test-20260625134303"
+          }
+        }
+      ]
+    },
+    "02-texts": {
+      "currentVersion": 1,
+      "history": [
+        {
+          "version": 1,
+          "size": "XS",
+          "createdAt": "2026-06-25T13:45:17.396Z",
+          "inputHash": "8d65c70d9d13e1a479ea69583d7c56ab28bd34e21518dc050a35dc5e11a2d278",
+          "needsReview": true,
+          "attempts": [
+            {
+              "attempt": 1,
+              "criticVerdict": {
+                "ok": false,
+                "issues": [
+                  "titleFull не содержит ключевых слов из темы товара"
+                ]
+              }
+            },
+            {
+              "attempt": 2,
+              "criticVerdict": {
+                "ok": false,
+                "issues": [
+                  "titleFull не содержит ключевых слов из темы товара"
+                ]
+              }
+            },
+            {
+              "attempt": 3,
+              "criticVerdict": {
+                "ok": false,
+                "issues": [
+                  "titleFull не содержит ключевых слов из темы товара"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "version": 1,
+          "size": "S",
+          "createdAt": "2026-06-25T13:47:29.552Z",
+          "inputHash": "d0cdd4c7189070a2105d4c58358a6dea84e5ef53e6e7c9835a0e1f56171323c8",
+          "needsReview": true,
+          "attempts": [
+            {
+              "attempt": 1,
+              "criticVerdict": {
+                "ok": false,
+                "issues": [
+                  "titleFull не содержит ключевых слов из темы товара"
+                ]
+              }
+            },
+            {
+              "attempt": 2,
+              "criticVerdict": {
+                "ok": false,
+                "issues": [
+                  "titleFull не содержит ключевых слов из темы товара"
+                ]
+              }
+            },
+            {
+              "attempt": 3,
+              "criticVerdict": {
+                "ok": false,
+                "issues": [
+                  "titleFull не содержит ключевых слов из темы товара"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "version": 1,
+          "size": "M",
+          "createdAt": "2026-06-25T13:47:33.151Z",
+          "inputHash": "17ac101dc118bc65252faaa95433d903ca10597efa83da0e81ee3e8b651dbfcc",
+          "needsReview": false,
+          "attempts": [
+            {
+              "attempt": 1,
+              "criticVerdict": {
+                "ok": true,
+                "issues": []
+              }
+            }
+          ]
+        }
+      ],
+      "error": null,
+      "failedAt": null
+    }
+  }
+}

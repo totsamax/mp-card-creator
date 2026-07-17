@@ -1,0 +1,52 @@
+{
+  "article": "e2e-test-20260625131446",
+  "assembledAt": "2026-06-25T13:14:57.355Z",
+  "steps": {
+    "01-normalize": {
+      "version": 1,
+      "artifacts": [
+        "master-data.json"
+      ],
+      "needsReview": false
+    },
+    "02-texts": {
+      "version": 1,
+      "artifacts": [
+        "L_texts.json",
+        "M_texts.json",
+        "S_texts.json",
+        "XL_texts.json",
+        "XS_texts.json"
+      ],
+      "needsReview": true
+    },
+    "03-images": {
+      "version": 1,
+      "artifacts": [
+        "L_infographic.png",
+        "M_infographic.png",
+        "S_infographic.png",
+        "XL_infographic.png",
+        "XS_infographic.png"
+      ],
+      "needsReview": true
+    },
+    "05-excel": {
+      "version": 1,
+      "artifacts": [
+        "e2e-test-20260625131446_ozon.xlsx",
+        "e2e-test-20260625131446_wb.xlsx"
+      ],
+      "needsReview": false
+    }
+  },
+  "completedSteps": [
+    "01-normalize",
+    "02-texts",
+    "03-images",
+    "05-excel"
+  ],
+  "pendingSteps": [
+    "04-video"
+  ]
+}

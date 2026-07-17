@@ -1,0 +1,389 @@
+{
+  "article": "e2e-test-20260625131550",
+  "steps": {
+    "01-normalize": {
+      "currentVersion": 1,
+      "history": [
+        {
+          "version": 1,
+          "createdAt": "2026-06-25T13:15:50.294Z",
+          "inputHash": "c3d044defcc2412680bb98b4d482b6df727f9b9cb199d85c11e75bb03ae0ee37",
+          "questionnaire": {
+            "moldType": "face",
+            "moldName": "Василиса",
+            "brand": "ТопМолд",
+            "theme": "Кукольное лицо",
+            "color": "Телесный",
+            "priceBaseM": 1200,
+            "sizes": [
+              {
+                "size": "XS",
+                "moldSize": 50,
+                "moldLength": 5,
+                "moldWidth": 4,
+                "moldHeight": 1.5,
+                "moldWeight": 80
+              },
+              {
+                "size": "S",
+                "moldSize": 65,
+                "moldLength": 6.5,
+                "moldWidth": 5.2,
+                "moldHeight": 1.8,
+                "moldWeight": 110
+              },
+              {
+                "size": "M",
+                "moldSize": 80,
+                "moldLength": 8,
+                "moldWidth": 6.3,
+                "moldHeight": 2,
+                "moldWeight": 145
+              },
+              {
+                "size": "L",
+                "moldSize": 95,
+                "moldLength": 9.5,
+                "moldWidth": 7.4,
+                "moldHeight": 2.2,
+                "moldWeight": 185
+              },
+              {
+                "size": "XL",
+                "moldSize": 110,
+                "moldLength": 11,
+                "moldWidth": 8.5,
+                "moldHeight": 2.5,
+                "moldWeight": 230
+              }
+            ],
+            "photos": [
+              "/lines/e2e-test-20260625131550/steps/photos/artifacts/e2e-face-mold.png"
+            ],
+            "artifacts": [
+              "images",
+              "excel-ozon",
+              "excel-wb"
+            ],
+            "article": "e2e-test-20260625131550"
+          }
+        }
+      ]
+    },
+    "02-texts": {
+      "currentVersion": 1,
+      "history": [
+        {
+          "version": 1,
+          "size": "XS",
+          "createdAt": "2026-06-25T13:15:50.985Z",
+          "inputHash": "794025d1f7b6fff3966aaf7456c306fc7d40253d2afbe2c984432dd78e2b9bcd",
+          "needsReview": true,
+          "attempts": [
+            {
+              "attempt": 1,
+              "criticVerdict": {
+                "ok": false,
+                "issues": [
+                  "titleFull не содержит ключевых слов из темы товара"
+                ]
+              }
+            },
+            {
+              "attempt": 2,
+              "criticVerdict": {
+                "ok": false,
+                "issues": [
+                  "titleFull не содержит ключевых слов из темы товара"
+                ]
+              }
+            },
+            {
+              "attempt": 3,
+              "criticVerdict": {
+                "ok": false,
+                "issues": [
+                  "titleFull не содержит ключевых слов из темы товара"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "version": 1,
+          "size": "S",
+          "createdAt": "2026-06-25T13:15:51.351Z",
+          "inputHash": "bd71369841bf7c5296308da292657818e99e97b82718dad8a144a3f79715ffcd",
+          "needsReview": true,
+          "attempts": [
+            {
+              "attempt": 1,
+              "criticVerdict": {
+                "ok": false,
+                "issues": [
+                  "titleFull не содержит ключевых слов из темы товара"
+                ]
+              }
+            },
+            {
+              "attempt": 2,
+              "criticVerdict": {
+                "ok": false,
+                "issues": [
+                  "titleFull не содержит ключевых слов из темы товара"
+                ]
+              }
+            },
+            {
+              "attempt": 3,
+              "criticVerdict": {
+                "ok": false,
+                "issues": [
+                  "titleFull не содержит ключевых слов из темы товара"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "version": 1,
+          "size": "M",
+          "createdAt": "2026-06-25T13:15:51.720Z",
+          "inputHash": "3d1f5c44cf0a2c9b7ee9073e38a224611a783b328323c56bf2bacb7d4a5f957f",
+          "needsReview": true,
+          "attempts": [
+            {
+              "attempt": 1,
+              "criticVerdict": {
+                "ok": false,
+                "issues": [
+                  "titleFull не содержит ключевых слов из темы товара"
+                ]
+              }
+            },
+            {
+              "attempt": 2,
+              "criticVerdict": {
+                "ok": false,
+                "issues": [
+                  "titleFull не содержит ключевых слов из темы товара"
+                ]
+              }
+            },
+            {
+              "attempt": 3,
+              "criticVerdict": {
+                "ok": false,
+                "issues": [
+                  "titleFull не содержит ключевых слов из темы товара"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "version": 1,
+          "size": "L",
+          "createdAt": "2026-06-25T13:15:52.093Z",
+          "inputHash": "b1156cdf21ed74870ba18b3ceb0a06e317c0c91bb732cd8a085e05665268afb8",
+          "needsReview": true,
+          "attempts": [
+            {
+              "attempt": 1,
+              "criticVerdict": {
+                "ok": false,
+                "issues": [
+                  "titleFull не содержит ключевых слов из темы товара"
+                ]
+              }
+            },
+            {
+              "attempt": 2,
+              "criticVerdict": {
+                "ok": false,
+                "issues": [
+                  "titleFull не содержит ключевых слов из темы товара"
+                ]
+              }
+            },
+            {
+              "attempt": 3,
+              "criticVerdict": {
+                "ok": false,
+                "issues": [
+                  "titleFull не содержит ключевых слов из темы товара"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "version": 1,
+          "size": "XL",
+          "createdAt": "2026-06-25T13:15:52.456Z",
+          "inputHash": "887090ab40ae4e3e4501b3c3e91a78d35673a6660025261f5af8ceda5f38b44b",
+          "needsReview": true,
+          "attempts": [
+            {
+              "attempt": 1,
+              "criticVerdict": {
+                "ok": false,
+                "issues": [
+                  "titleFull не содержит ключевых слов из темы товара"
+                ]
+              }
+            },
+            {
+              "attempt": 2,
+              "criticVerdict": {
+                "ok": false,
+                "issues": [
+                  "titleFull не содержит ключевых слов из темы товара"
+                ]
+              }
+            },
+            {
+              "attempt": 3,
+              "criticVerdict": {
+                "ok": false,
+                "issues": [
+                  "titleFull не содержит ключевых слов из темы товара"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "error": null,
+      "failedAt": null
+    },
+    "03-images": {
+      "currentVersion": 1,
+      "history": [
+        {
+          "version": 1,
+          "size": "XS",
+          "imageType": "infographic",
+          "createdAt": "2026-06-25T13:15:55.658Z",
+          "inputHash": "f1bf163e2012fbb81f7b19969667193c27e8d831f7ffd420433f396dfc08664b",
+          "needsReview": true,
+          "attempts": [
+            {
+              "attempt": 1,
+              "criticVerdict": {
+                "ok": true,
+                "issues": []
+              }
+            }
+          ]
+        },
+        {
+          "version": 1,
+          "size": "S",
+          "imageType": "infographic",
+          "createdAt": "2026-06-25T13:15:55.894Z",
+          "inputHash": "644f62e8f2e97a22fed1a16ff172698c3edc6295828f6c4e02e7741c67d094a7",
+          "needsReview": true,
+          "attempts": [
+            {
+              "attempt": 1,
+              "criticVerdict": {
+                "ok": true,
+                "issues": []
+              }
+            }
+          ]
+        },
+        {
+          "version": 1,
+          "size": "M",
+          "imageType": "infographic",
+          "createdAt": "2026-06-25T13:15:56.142Z",
+          "inputHash": "6d3fc4498c1b00e620c18fe7b48aa37b49092e326011d3e8c99d41dad29802f7",
+          "needsReview": true,
+          "attempts": [
+            {
+              "attempt": 1,
+              "criticVerdict": {
+                "ok": true,
+                "issues": []
+              }
+            }
+          ]
+        },
+        {
+          "version": 1,
+          "size": "L",
+          "imageType": "infographic",
+          "createdAt": "2026-06-25T13:15:56.384Z",
+          "inputHash": "fd29e4a431e71434bfde91f894e20e6de1a387fa65cd9c67bda12451ecac2a04",
+          "needsReview": true,
+          "attempts": [
+            {
+              "attempt": 1,
+              "criticVerdict": {
+                "ok": true,
+                "issues": []
+              }
+            }
+          ]
+        },
+        {
+          "version": 1,
+          "size": "XL",
+          "imageType": "infographic",
+          "createdAt": "2026-06-25T13:15:56.634Z",
+          "inputHash": "47e0abb3a8a3ad8e8b20755186fca5affab648afd9ab67304da4fdebd469d92a",
+          "needsReview": true,
+          "attempts": [
+            {
+              "attempt": 1,
+              "criticVerdict": {
+                "ok": true,
+                "issues": []
+              }
+            }
+          ]
+        }
+      ],
+      "error": null,
+      "failedAt": null,
+      "overrides": {
+        "XS_infographic.png": "v1",
+        "S_infographic.png": "v1",
+        "M_infographic.png": "v1",
+        "L_infographic.png": "v1",
+        "XL_infographic.png": "v1"
+      }
+    },
+    "05-excel": {
+      "currentVersion": 1,
+      "history": [
+        {
+          "version": 1,
+          "createdAt": "2026-06-25T13:16:00.825Z",
+          "inputHash": "97e9581904c5c50ffa2166ca6645cf634ae8553e5d9262b2ee7c98a7c1f3c70e",
+          "artifacts": [
+            "e2e-test-20260625131550_ozon.xlsx",
+            "e2e-test-20260625131550_wb.xlsx"
+          ]
+        }
+      ]
+    },
+    "06-assemble": {
+      "currentVersion": 1,
+      "history": [
+        {
+          "version": 1,
+          "createdAt": "2026-06-25T13:16:00.834Z",
+          "completedSteps": [
+            "01-normalize",
+            "02-texts",
+            "03-images",
+            "05-excel"
+          ]
+        }
+      ]
+    }
+  }
+}
