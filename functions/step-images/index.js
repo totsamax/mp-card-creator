@@ -4,13 +4,11 @@ const crypto = require('crypto');
 const path   = require('path');
 
 const SHARED       = process.env.SHARED_LAYER_PATH || path.resolve(__dirname, '../../layers/shared');
-const OPENAI_BASE         = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
-const OPENAI_IMAGE_MODEL  = process.env.OPENAI_IMAGE_MODEL  || 'gpt-image-1';
-const OPENAI_VISION_MODEL = process.env.OPENAI_VISION_MODEL || 'gpt-4o';
+const OPENAI_BASE        = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
+const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
 
-const store        = require(path.join(SHARED, 'versionStore'));
-const promptsTmpl  = require(path.join(SHARED, 'config/prompts.images.json'));
-const criticCfg    = require(path.join(SHARED, 'config/prompts.critic-images.json'));
+const store       = require(path.join(SHARED, 'versionStore'));
+const promptsTmpl = require(path.join(SHARED, 'config/prompts.images.json'));
 
 const STEP_ID      = '03-images';
 const MAX_ATTEMPTS = 3;
@@ -72,15 +70,7 @@ exports.handler = async (event) => {
     }
 
     // --- Critic (Claude Vision or stub) ---
-    let criticVerdict;
-    try {
-      criticVerdict = await runCritic(imageBuffer, sizeRecord, slideKey);
-    } catch (err) {
-      // If critic call fails, treat as ok to not block the pipeline.
-      // This is NOT a step error — do NOT write { error, failedAt } here.
-      console.warn('[step-images] critic failed, accepting image:', err.message);
-      criticVerdict = { ok: true, issues: [] };
-    }
+    const criticVerdict = runCritic(imageBuffer);
 
     if (criticVerdict.ok || attempt >= MAX_ATTEMPTS) {
       const nextVersion  = runVersion ?? (stepMeta?.currentVersion ?? 0) + 1;
@@ -373,46 +363,27 @@ async function generateImageOpenAI(article, prompt, slideKey) {
 }
 
 // ---------------------------------------------------------------------------
-// Critic — Claude Vision
+// Critic — rule-based (no external API needed)
 // ---------------------------------------------------------------------------
 
-async function runCritic(imageBuffer, sizeRecord, imageType) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    return { ok: true, issues: [] };
+function runCritic(imageBuffer) {
+  const issues = [];
+
+  // Must be a non-empty buffer
+  if (!imageBuffer || imageBuffer.length < 1024) {
+    issues.push('image too small or empty');
+    return { ok: false, issues };
   }
 
-  const userPrompt = criticCfg.user
-    .replace('{{imageType}}',  `${imageType} — ${criticCfg.imageTypes[imageType] || imageType}`)
-    .replace('{{moldName}}',   sizeRecord.moldName)
-    .replace('{{color}}',      sizeRecord.color)
-    .replace('{{moldLength}}', sizeRecord.moldLength)
-    .replace('{{moldWidth}}',  sizeRecord.moldWidth)
-    .replace('{{moldHeight}}', sizeRecord.moldHeight);
+  // Must start with a valid PNG or JPEG magic signature
+  const isPng  = imageBuffer[0] === 0x89 && imageBuffer[1] === 0x50 && imageBuffer[2] === 0x4e && imageBuffer[3] === 0x47;
+  const isJpeg = imageBuffer[0] === 0xff && imageBuffer[1] === 0xd8;
+  const isWebP = imageBuffer[8] === 0x57 && imageBuffer[9] === 0x45 && imageBuffer[10] === 0x42 && imageBuffer[11] === 0x50;
+  if (!isPng && !isJpeg && !isWebP) {
+    issues.push('not a recognised image format (expected PNG, JPEG, or WebP)');
+  }
 
-  const res = await fetch(`${OPENAI_BASE}/chat/completions`, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model:      OPENAI_VISION_MODEL,
-      max_tokens: 256,
-      messages: [
-        { role: 'system', content: criticCfg.system },
-        {
-          role: 'user',
-          content: [
-            { type: 'image_url', image_url: { url: `data:image/png;base64,${imageBuffer.toString('base64')}` } },
-            { type: 'text',      text: userPrompt },
-          ],
-        },
-      ],
-    }),
-  });
-
-  if (!res.ok) throw new Error(`Vision API error: ${res.status} ${await res.text()}`);
-  const data   = await res.json();
-  const parsed = JSON.parse(data.choices[0].message.content);
-  return { ok: Boolean(parsed.ok), issues: parsed.issues ?? [] };
+  return { ok: issues.length === 0, issues };
 }
 
 // ---------------------------------------------------------------------------
