@@ -154,7 +154,8 @@ test('UI-04: delete button → confirm dialog → line removed', async ({ page }
   // Hover to reveal the delete button
   await lineGroup.hover();
   const deleteBtn = lineGroup.getByRole('button', { name: /Удалить линейку/i });
-  await deleteBtn.waitFor({ state: 'visible', timeout: 3000 });
+  // opacity:0 passes Playwright's 'visible' check — assert CSS opacity explicitly
+  await expect(deleteBtn).toHaveCSS('opacity', '1', { timeout: 3000 });
   await deleteBtn.click();
 
   // Confirm dialog must appear
