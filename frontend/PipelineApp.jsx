@@ -1038,6 +1038,8 @@ function QuestionnaireForm({ onSubmit, loading, initialData, isEdit }) {
   };
 
   const needsPhoto = !isEdit && photoFiles.length === 0;
+  const ARTICLE_RE = /^[a-zA-Z0-9_-]{1,64}$/;
+  const articleInvalid = !isEdit && form.article && !ARTICLE_RE.test(form.article);
 
   return (
     <div className="pp-card rounded-lg p-5 max-w-3xl">
@@ -1202,10 +1204,11 @@ function QuestionnaireForm({ onSubmit, loading, initialData, isEdit }) {
       </div>
 
       {!isEdit && !form.article && <p className="text-xs mb-2" style={{ color: 'var(--clay-dark)' }}>Заполните поле «Артикульная серия» перед отправкой</p>}
+      {articleInvalid && <p className="text-xs mb-2" style={{ color: 'var(--clay-dark)' }}>Артикул: только латинские буквы, цифры, «-» и «_» (напр. 0553 или face-mold-01)</p>}
       {needsPhoto && <p className="text-xs mb-2" style={{ color: 'var(--clay-dark)' }}>Прикрепите хотя бы одно фото молда</p>}
       <button
         className="pp-btn pp-btn-primary"
-        disabled={loading || !form.article || !form.moldName || needsPhoto}
+        disabled={loading || !form.article || !form.moldName || needsPhoto || articleInvalid}
         onClick={() => onSubmit(buildQuestionnaire(), photoFiles, photoTypes)}>
         {isEdit
           ? <><Save size={14} aria-hidden="true" /> {loading ? 'Обновляем…' : 'Обновить и перезапустить'}</>
