@@ -34,13 +34,17 @@ function patchConsole(method) {
 let envLoaded = 0;
 try {
   const envPath = path.resolve(__dirname, '../.env.local');
-  fs.readFileSync(envPath, 'utf8').split(/\r?\n/).forEach(line => {
-    const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
-    if (m && process.env[m[1]] === undefined) {
-      process.env[m[1]] = m[2].trim().replace(/^['"]|['"]$/g, '');
-      envLoaded++;
-    }
-  });
+  // Normalize all line-ending variants (CRLF, LF, bare CR) before splitting
+  fs.readFileSync(envPath, 'utf8')
+    .replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    .split('\n')
+    .forEach(line => {
+      const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+      if (m && process.env[m[1]] === undefined) {
+        process.env[m[1]] = m[2].trim().replace(/^['"]|['"]$/g, '');
+        envLoaded++;
+      }
+    });
 } catch { /* .env.local not present — ok */ }
 const { handler } = require(path.resolve(__dirname, '../functions/api'));
 
