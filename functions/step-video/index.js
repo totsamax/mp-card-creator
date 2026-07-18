@@ -49,14 +49,18 @@ exports.handler = async (event) => {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY not set');
 
-    // Load reference image from step-03 (optional)
-    let referenceImageB64 = null;
+    // Load reference image URL from step-03 (optional).
+    // Apiframe requires a public HTTPS URL — use YC Object Storage when YC_BUCKET_PUBLIC=true.
+    let referenceImageUrl = null;
+    const ycBucket  = process.env.YC_BUCKET_NAME;
+    const bucketPub = process.env.YC_BUCKET_PUBLIC === 'true';
     try {
       const imgMeta = manifest?.steps?.['03-images'];
-      if (imgMeta?.currentVersion) {
-        const imgBuf = await store.getArtifact(article, '03-images', imgMeta.currentVersion, `${size}_main.png`);
-        referenceImageB64 = imgBuf.toString('base64');
-        console.log(`[step-video] using ${size}_main.png as reference image`);
+      if (imgMeta?.currentVersion && ycBucket && bucketPub) {
+        referenceImageUrl = `https://storage.yandexcloud.net/${ycBucket}/${article}/03-images/${imgMeta.currentVersion}/${size}_main.png`;
+        console.log(`[step-video] using ${size}_main.png reference: ${referenceImageUrl}`);
+      } else if (imgMeta?.currentVersion) {
+        console.log('[step-video] YC_BUCKET_PUBLIC not set — generating text-to-video (set YC_BUCKET_PUBLIC=true for image-to-video)');
       }
     } catch {
       // reference image optional — fall back to text-only
@@ -65,7 +69,7 @@ exports.handler = async (event) => {
     const prompt = buildPrompt(videoTmpl.prompts[videoType] || videoTmpl.prompts.turntable, sizeRecord);
 
     // Submit to Kling via apiframe v2
-    const jobId = await submitKlingTask({ prompt, referenceImageB64, apiKey });
+    const jobId = await submitKlingTask({ prompt, referenceImageUrl, apiKey });
     console.log(`[step-video] submitted ${article} ${size}/${videoType} → jobId=${jobId}`);
 
     await store.updateManifest(article, STEP_ID, {
@@ -148,10 +152,10 @@ exports.handler = async (event) => {
 // Kling.ai via apiframe v2
 // ---------------------------------------------------------------------------
 
-async function submitKlingTask({ prompt, referenceImageB64, apiKey }) {
-  // image-to-video (kling-2.1) when reference available, else text-to-video (kling-2.1-master)
-  const body = referenceImageB64
-    ? { model: 'kling-3.0', prompt, klingParams: { start_image: `data:image/png;base64,${referenceImageB64}` } }
+async function submitKlingTask({ prompt, referenceImageUrl, apiKey }) {
+  // image-to-video when reference URL available, else text-to-video
+  const body = referenceImageUrl
+    ? { model: 'kling-3.0', prompt, klingParams: { start_image: referenceImageUrl } }
     : { model: 'kling-3.0', prompt };
 
   const res = await fetch('https://api.apiframe.ai/v2/videos/generate', {

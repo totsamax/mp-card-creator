@@ -653,15 +653,18 @@ async function handleRegenerate(article, stepId, event, item) {
       } else {
         // Pin ONE version for the whole run (same fix as 02-texts) so every size+type
         // writes its artifact into the same v{N} folder.
-        const runVersion = (stepMeta3?.currentVersion ?? 0) + 1;
-        messages = SIZES.flatMap(size =>
-          IMAGE_TYPES.map(imageType => ({ article, size, imageType, attempt: 1, force, runVersion }))
+        const runVersion    = (stepMeta3?.currentVersion ?? 0) + 1;
+        const sizes3        = Array.isArray(body.sizes)      && body.sizes.length > 0      ? body.sizes      : SIZES;
+        const imageTypes3   = Array.isArray(body.imageTypes) && body.imageTypes.length > 0 ? body.imageTypes : IMAGE_TYPES;
+        messages = sizes3.flatMap(size =>
+          imageTypes3.map(imageType => ({ article, size, imageType, attempt: 1, force, runVersion }))
         );
       }
     } else if (stepId === '04-video') {
-      const sizes = item ? [item] : SIZES;
+      const sizes      = item ? [item] : (Array.isArray(body.sizes) && body.sizes.length > 0 ? body.sizes : SIZES);
+      const videoTypes = Array.isArray(body.videoTypes) && body.videoTypes.length > 0 ? body.videoTypes : VIDEO_TYPES;
       messages = sizes.flatMap(size =>
-        VIDEO_TYPES.map(videoType => ({ article, size, videoType, attempt: 1, force }))
+        videoTypes.map(videoType => ({ article, size, videoType, attempt: 1, force }))
       );
     }
 
@@ -875,9 +878,13 @@ async function handleGeneratePrompt(article, slideId, event) {
 async function handleSlideRegenerate(article, slideId, event) {
   if (!SLIDE_ID_RE.test(slideId)) return respond(400, { error: 'Invalid slideId' });
 
+  let body = {};
+  if (event.body) { try { body = JSON.parse(event.isBase64Encoded ? Buffer.from(event.body,'base64').toString() : event.body); } catch {} }
+  const sizesFilter = Array.isArray(body.sizes) && body.sizes.length > 0 ? body.sizes : SIZES;
+
   const manifest   = await store.getManifest(article);
   const runVersion = manifest?.steps?.['03-images']?.currentVersion ?? 1;
-  const messages   = SIZES.map(size => ({ article, size, slideId, attempt: 1, force: true, runVersion }));
+  const messages   = sizesFilter.map(size => ({ article, size, slideId, attempt: 1, force: true, runVersion }));
   await runLocally('03-images', messages);
   return respond(202, { queued: true, article, stepId: '03-images', slideId, count: messages.length });
 }
