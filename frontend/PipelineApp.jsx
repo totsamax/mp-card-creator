@@ -980,6 +980,7 @@ function QuestionnaireForm({ onSubmit, loading, initialData, isEdit }) {
   const [showUserTexts, setShowUserTexts] = useState(Boolean(
     initialData?.userTexts?.titleShort || initialData?.userTexts?.titleFull || initialData?.userTexts?.annotation
   ));
+  const [submitted, setSubmitted] = useState(false);
 
   // Re-initialize when initialData changes (e.g., user switches between lines)
   useEffect(() => {
@@ -994,6 +995,7 @@ function QuestionnaireForm({ onSubmit, loading, initialData, isEdit }) {
     ));
     setPhotoFiles([]);
     setPhotoTypes({});
+    setSubmitted(false);
   }, [initialData?.article]);
 
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
@@ -1037,9 +1039,9 @@ function QuestionnaireForm({ onSubmit, loading, initialData, isEdit }) {
     };
   };
 
-  const needsPhoto = !isEdit && photoFiles.length === 0;
-  const ARTICLE_RE = /^[a-zA-Z0-9_-]{1,64}$/;
-  const articleInvalid = !isEdit && form.article && !ARTICLE_RE.test(form.article);
+  const moldNameError = submitted && !form.moldName;
+  const articleError  = !isEdit && submitted && !form.article;
+  const photoError    = !isEdit && submitted && photoFiles.length === 0;
 
   return (
     <div className="pp-card rounded-lg p-5 max-w-3xl">
@@ -1054,15 +1056,17 @@ function QuestionnaireForm({ onSubmit, loading, initialData, isEdit }) {
 
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div>
-          <label className="pp-label">Имя молда</label>
+          <label className="pp-label">Имя молда <span aria-hidden="true" style={{ color: 'var(--clay-dark)' }}>*</span></label>
           <input className="pp-input" placeholder="напр. Василиса" value={form.moldName} onChange={(e) => set('moldName', e.target.value)} />
+          {moldNameError && <p className="text-xs mt-1" style={{ color: 'var(--clay-dark)' }}>Введите имя молда</p>}
         </div>
         <div>
-          <label className="pp-label">Артикульная серия</label>
+          <label className="pp-label">Артикульная серия{!isEdit && <span aria-hidden="true" style={{ color: 'var(--clay-dark)' }}> *</span>}</label>
           <input className="pp-input pp-mono" placeholder="напр. 0553" value={form.article}
             readOnly={isEdit}
             style={isEdit ? { background: 'var(--paper)', color: 'var(--muted)' } : undefined}
-            onChange={(e) => !isEdit && set('article', e.target.value)} />
+            onChange={(e) => !isEdit && set('article', e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''))} />
+          {articleError && <p className="text-xs mt-1" style={{ color: 'var(--clay-dark)' }}>Введите артикул — лат. буквы, цифры, «-» и «_»</p>}
         </div>
       </div>
 
@@ -1165,9 +1169,10 @@ function QuestionnaireForm({ onSubmit, loading, initialData, isEdit }) {
 
       {/* GAP-03: photo upload with type tagging */}
       <div className="mb-4">
-        <label className="pp-label">Фото молда{isEdit ? ' (необязательно при редактировании)' : ''}</label>
+        <label className="pp-label">Фото молда{isEdit ? ' (необязательно при редактировании)' : <span aria-hidden="true" style={{ color: 'var(--clay-dark)' }}> *</span>}</label>
         <input type="file" multiple accept="image/*" className="pp-input"
           onChange={onFilesChange} />
+        {photoError && <p className="text-xs mt-1" style={{ color: 'var(--clay-dark)' }}>Прикрепите хотя бы одно фото молда</p>}
         {photoFiles.length > 0 && (
           <div className="flex flex-col gap-1 mt-2">
             {photoFiles.map(f => (
@@ -1203,13 +1208,15 @@ function QuestionnaireForm({ onSubmit, loading, initialData, isEdit }) {
         </div>
       </div>
 
-      {!isEdit && !form.article && <p className="text-xs mb-2" style={{ color: 'var(--clay-dark)' }}>Заполните поле «Артикульная серия» перед отправкой</p>}
-      {articleInvalid && <p className="text-xs mb-2" style={{ color: 'var(--clay-dark)' }}>Артикул: только латинские буквы, цифры, «-» и «_» (напр. 0553 или face-mold-01)</p>}
-      {needsPhoto && <p className="text-xs mb-2" style={{ color: 'var(--clay-dark)' }}>Прикрепите хотя бы одно фото молда</p>}
       <button
         className="pp-btn pp-btn-primary"
-        disabled={loading || !form.article || !form.moldName || needsPhoto || articleInvalid}
-        onClick={() => onSubmit(buildQuestionnaire(), photoFiles, photoTypes)}>
+        disabled={loading}
+        onClick={() => {
+          setSubmitted(true);
+          const isValid = form.moldName && (isEdit || (form.article && photoFiles.length > 0));
+          if (!isValid) return;
+          onSubmit(buildQuestionnaire(), photoFiles, photoTypes);
+        }}>
         {isEdit
           ? <><Save size={14} aria-hidden="true" /> {loading ? 'Обновляем…' : 'Обновить и перезапустить'}</>
           : <><Plus size={14} aria-hidden="true" /> {loading ? 'Запускаем…' : 'Сохранить и запустить пайплайн'}</>}
