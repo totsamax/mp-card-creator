@@ -57,7 +57,7 @@ exports.handler = async (event) => {
     try {
       const imgMeta = manifest?.steps?.['03-images'];
       if (imgMeta?.currentVersion && ycBucket && bucketPub) {
-        referenceImageUrl = `https://storage.yandexcloud.net/${ycBucket}/${article}/03-images/${imgMeta.currentVersion}/${size}_main.png`;
+        referenceImageUrl = `https://storage.yandexcloud.net/${ycBucket}/${article}/03-images/v${imgMeta.currentVersion}/${size}_main.png`;
         console.log(`[step-video] using ${size}_main.png reference: ${referenceImageUrl}`);
       } else if (imgMeta?.currentVersion) {
         console.log('[step-video] YC_BUCKET_PUBLIC not set — generating text-to-video (set YC_BUCKET_PUBLIC=true for image-to-video)');

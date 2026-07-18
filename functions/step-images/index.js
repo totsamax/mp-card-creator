@@ -248,7 +248,7 @@ async function generateImageApiframe(article, prompt) {
     try {
       const photoNames = await store.listArtifacts(article, 'photos', 1);
       if (photoNames && photoNames.length > 0) {
-        const photoUrl = `https://storage.yandexcloud.net/${ycBucket}/${article}/photos/1/${photoNames[0]}`;
+        const photoUrl = `https://storage.yandexcloud.net/${ycBucket}/${article}/photos/v1/${photoNames[0]}`;
         inputImages = photoUrl;
         console.log(`[step-images] passing mold photo URL to apiframe: ${photoUrl}`);
       }
