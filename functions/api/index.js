@@ -937,8 +937,7 @@ async function handleSlideFileUpload(article, slideId, event) {
 async function handleDeleteLine(article) {
   const manifest = await store.getManifest(article);
   if (!manifest) return respond(404, { error: `Article "${article}" not found` });
-  await store.deleteAllArtifacts(article);
-  await store.deleteManifest(article);
+  await store.softDeleteManifest(article);
   return respond(200, { ok: true, article });
 }
 

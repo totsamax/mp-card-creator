@@ -21,7 +21,9 @@ const local = {
     const p = manifestPath(article);
     try {
       const raw = await fs.promises.readFile(p, 'utf8');
-      return JSON.parse(raw);
+      const manifest = JSON.parse(raw);
+      if (manifest.deleted) return null;
+      return manifest;
     } catch (err) {
       if (err.code === 'ENOENT') return null;
       throw err;
@@ -84,6 +86,18 @@ const local = {
     }
   },
 
+  async softDeleteManifest(article) {
+    const p = manifestPath(article);
+    try {
+      const manifest = JSON.parse(await fs.promises.readFile(p, 'utf8'));
+      manifest.deleted = true;
+      manifest.deletedAt = new Date().toISOString();
+      await fs.promises.writeFile(p, JSON.stringify(manifest, null, 2), 'utf8');
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
+  },
+
   async deleteManifest(article) {
     try { await fs.promises.rm(articleDir(article), { recursive: true, force: true }); } catch { /* ok */ }
   },
@@ -143,7 +157,7 @@ const yandexCloud = {
       TableName: YDB_TABLE(),
       Key: { article },
     }));
-    if (!res.Item) return null;
+    if (!res.Item || res.Item.deleted) return null;
     return typeof res.Item.data === 'string' ? JSON.parse(res.Item.data) : res.Item.data;
   },
 
@@ -212,9 +226,20 @@ const yandexCloud = {
     const client = DynamoDBDocumentClient.from(getDynamoClient());
     const res = await client.send(new ScanCommand({
       TableName: YDB_TABLE(),
-      ProjectionExpression: 'article',
+      ProjectionExpression: 'article, deleted',
     }));
-    return (res.Items || []).map(item => item.article);
+    return (res.Items || []).filter(item => !item.deleted).map(item => item.article);
+  },
+
+  async softDeleteManifest(article) {
+    const { DynamoDBDocumentClient, GetCommand, PutCommand } = require('@aws-sdk/lib-dynamodb');
+    const client = DynamoDBDocumentClient.from(getDynamoClient());
+    const res = await client.send(new GetCommand({ TableName: YDB_TABLE(), Key: { article } }));
+    if (!res.Item) return;
+    await client.send(new PutCommand({
+      TableName: YDB_TABLE(),
+      Item: { ...res.Item, deleted: true, deletedAt: new Date().toISOString() },
+    }));
   },
 
   async deleteManifest(article) {
@@ -283,6 +308,7 @@ module.exports = {
   getArtifact:       (article, stepId, version, name)   => getAdapter().getArtifact(article, stepId, version, name),
   listArtifacts:     (article, stepId, version)         => getAdapter().listArtifacts(article, stepId, version),
   listArticles:      ()                                 => getAdapter().listArticles(),
+  softDeleteManifest:(article)                          => getAdapter().softDeleteManifest(article),
   deleteManifest:    (article)                          => getAdapter().deleteManifest(article),
   deleteAllArtifacts:(article)                          => getAdapter().deleteAllArtifacts(article),
 };
