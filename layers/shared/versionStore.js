@@ -83,6 +83,14 @@ const local = {
       return [];
     }
   },
+
+  async deleteManifest(article) {
+    try { await fs.promises.rm(articleDir(article), { recursive: true, force: true }); } catch { /* ok */ }
+  },
+
+  async deleteAllArtifacts(article) {
+    // Local: same directory as manifest — handled by deleteManifest.
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -208,6 +216,30 @@ const yandexCloud = {
     }));
     return (res.Items || []).map(item => item.article);
   },
+
+  async deleteManifest(article) {
+    const { DynamoDBDocumentClient, DeleteCommand } = require('@aws-sdk/lib-dynamodb');
+    const client = DynamoDBDocumentClient.from(getDynamoClient());
+    await client.send(new DeleteCommand({ TableName: YDB_TABLE(), Key: { article } }));
+  },
+
+  async deleteAllArtifacts(article) {
+    const { ListObjectsV2Command, DeleteObjectsCommand } = require('@aws-sdk/client-s3');
+    const s3 = getS3Client();
+    let continuationToken;
+    do {
+      const res = await s3.send(new ListObjectsV2Command({
+        Bucket: S3_BUCKET(), Prefix: `${article}/`, ContinuationToken: continuationToken,
+      }));
+      if (res.Contents && res.Contents.length > 0) {
+        await s3.send(new DeleteObjectsCommand({
+          Bucket: S3_BUCKET(),
+          Delete: { Objects: res.Contents.map(o => ({ Key: o.Key })) },
+        }));
+      }
+      continuationToken = res.IsTruncated ? res.NextContinuationToken : undefined;
+    } while (continuationToken);
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -245,12 +277,14 @@ function withManifestLock(article, fn) {
 // ---------------------------------------------------------------------------
 
 module.exports = {
-  getManifest:    (article)                          => getAdapter().getManifest(article),
-  updateManifest: (article, stepId, patch)           => withManifestLock(article, () => getAdapter().updateManifest(article, stepId, patch)),
-  putArtifact:    (article, stepId, version, name, buffer) => getAdapter().putArtifact(article, stepId, version, name, buffer),
-  getArtifact:    (article, stepId, version, name)   => getAdapter().getArtifact(article, stepId, version, name),
-  listArtifacts:  (article, stepId, version)         => getAdapter().listArtifacts(article, stepId, version),
-  listArticles:   ()                                 => getAdapter().listArticles(),
+  getManifest:       (article)                          => getAdapter().getManifest(article),
+  updateManifest:    (article, stepId, patch)           => withManifestLock(article, () => getAdapter().updateManifest(article, stepId, patch)),
+  putArtifact:       (article, stepId, version, name, buffer) => getAdapter().putArtifact(article, stepId, version, name, buffer),
+  getArtifact:       (article, stepId, version, name)   => getAdapter().getArtifact(article, stepId, version, name),
+  listArtifacts:     (article, stepId, version)         => getAdapter().listArtifacts(article, stepId, version),
+  listArticles:      ()                                 => getAdapter().listArticles(),
+  deleteManifest:    (article)                          => getAdapter().deleteManifest(article),
+  deleteAllArtifacts:(article)                          => getAdapter().deleteAllArtifacts(article),
 };
 
 // ---------------------------------------------------------------------------

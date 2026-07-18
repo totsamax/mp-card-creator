@@ -47,7 +47,7 @@ function renderText(template, ctx) {
  * @returns {object[]}            - one record per size (XS–XL), ordered as template.sizes
  */
 function computeMasterData(questionnaire, template) {
-  const { moldName, article, brand, theme, color, priceBaseM, moldType, sizes: sizeRows } = questionnaire;
+  const { moldName, article, brand, theme, color, priceBaseM, moldType, sizes: sizeRows, userTexts } = questionnaire;
   const { baseSizeKey, computedFields, textTemplates, static: staticFields } = template;
 
   // select type-specific config (topic/purpose/titleFull/annotation) with fallback to static/textTemplates
@@ -132,6 +132,7 @@ function computeMasterData(questionnaire, template) {
       ...staticFields,
       topic,
       purpose,
+      userTexts:     userTexts || {},
     };
   });
 }

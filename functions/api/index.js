@@ -78,10 +78,12 @@ async function runLocally(stepId, messages) {
         .then(r => { console.log(`[local] ${stepId} ok:`, JSON.stringify(msg), '→', r.statusCode); return r; })
       )
     );
+    let hasError = false;
     for (let i = 0; i < results.length; i++) {
       const res = results[i];
       const msg = messages[i];
       if (res.status === 'rejected') {
+        hasError = true;
         const err = res.reason;
         console.error(`[local] ${stepId} error:`, err.message);
         // REL-01 / D-06: record the failure to the manifest so the frontend
@@ -92,6 +94,17 @@ async function runLocally(stepId, messages) {
           console.error('[local] failed to record error to manifest:', e.message);
         }
       }
+    }
+    // UX-01: notify via webhook when the step finishes (configure WEBHOOK_URL in .env.local)
+    const webhookUrl = process.env.WEBHOOK_URL;
+    if (webhookUrl && messages.length > 0) {
+      const article = messages[0].article;
+      const status  = hasError ? 'error' : 'done';
+      fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ article, stepId, status, timestamp: new Date().toISOString(), count: messages.length }),
+      }).catch(e => console.warn('[local] webhook delivery failed:', e.message));
     }
   })().catch(console.error);
 }
@@ -159,6 +172,11 @@ exports.handler = async (event) => {
       return await handleSlideFileUpload(article, decodeURIComponent(slideFilesMatch[1]), event);
     }
 
+    // DELETE /lines/:id — delete the line and all its S3 artifacts
+    if (method === 'DELETE' && rest === '') {
+      return await handleDeleteLine(article);
+    }
+
     // GET /lines/:id/download — zip of all artifacts
     if (method === 'GET' && rest === '/download') {
       return await handleDownload(article);
@@ -167,6 +185,22 @@ exports.handler = async (event) => {
     // POST /lines/:id/rename
     if (method === 'POST' && rest === '/rename') {
       return await handleRenameLine(article, event);
+    }
+
+    // PUT /lines/:id/questionnaire — update questionnaire, re-run normalize (force)
+    if (method === 'PUT' && rest === '/questionnaire') {
+      return await handleUpdateQuestionnaire(article, event);
+    }
+
+    // PUT /lines/:id/master-data — save manually-edited master-data as a new version
+    if (method === 'PUT' && rest === '/master-data') {
+      return await handleUpdateMasterData(article, event);
+    }
+
+    // POST /lines/:id/publish/:marketplace — publish to Ozon or WB (stub, needs credentials)
+    const publishMatch = rest.match(/^\/publish\/(ozon|wb)$/);
+    if (method === 'POST' && publishMatch) {
+      return await handlePublish(article, publishMatch[1]);
     }
 
     // GET /lines/:id/manifest
@@ -386,6 +420,28 @@ async function handleCreateLine(event) {
 
     // Assign photos BEFORE inputHash computation (Pitfall 4: photos must be part of hash)
     questionnaire.photos = photoRefs;
+
+    // GAP-03: parse photoTypes { filename → type } and store in questionnaire for CRUD-02 restore
+    const photoTypesRaw = event.formFields && event.formFields.photoTypes;
+    let photoTypeMap = {}; // originalFilename → 'mold'|'casting'|'lifestyle'
+    if (photoTypesRaw) {
+      try { photoTypeMap = JSON.parse(photoTypesRaw); } catch { /* ignore malformed */ }
+      questionnaire.photoTypes = photoTypeMap;
+    }
+
+    // Build slideFileMap using originalFilename from event.files to match photoRef
+    const PHOTO_TYPE_TO_SLIDE_INLINE = { mold: 'main', casting: 'infographic', lifestyle: 'lifestyle' };
+    const slideFileMapInline = {};
+    for (let i = 0; i < event.files.length; i++) {
+      const origName = event.files[i].filename || '';
+      const type = photoTypeMap[origName];
+      const slideId = type && PHOTO_TYPE_TO_SLIDE_INLINE[type];
+      if (slideId && photoRefs[i]) {
+        if (!slideFileMapInline[slideId]) slideFileMapInline[slideId] = [];
+        slideFileMapInline[slideId].push(photoRefs[i]);
+      }
+    }
+    questionnaire._slideFileMap = slideFileMapInline;
   } else {
     // JSON path — existing logic unchanged
     let body;
@@ -399,6 +455,10 @@ async function handleCreateLine(event) {
     }
     ({ force = false, ...questionnaire } = body);
   }
+
+  // GAP-03: extract internal routing key before hash computation so it doesn't pollute inputHash or stored questionnaire
+  const _slideFileMap = questionnaire._slideFileMap || {};
+  delete questionnaire._slideFileMap;
 
   const { article } = questionnaire;
   if (!article || !/^[a-zA-Z0-9_-]{1,64}$/.test(article)) {
@@ -438,6 +498,20 @@ async function handleCreateLine(event) {
     currentVersion: nextVersion,
     history: [...(stepMeta?.history ?? []), historyEntry],
   });
+
+  // GAP-03: auto-populate slides from photoTypes (mold→main, casting→infographic, lifestyle→lifestyle)
+  if (Object.keys(_slideFileMap).length > 0) {
+    const slideFileMap = _slideFileMap;
+    const slideCfg = await readSlidesConfig(article);
+    const updatedSlides = slideCfg.slides.map(s => {
+      const newFiles = slideFileMap[s.id];
+      if (!newFiles) return s;
+      return { ...s, files: [...(s.files || []), ...newFiles] };
+    });
+    await store.updateManifest(article, '03-images', {
+      slidesConfig: { feedbackSuffix: slideCfg.feedbackSuffix, slides: updatedSlides },
+    });
+  }
 
   return respond(200, { article, stepId: '01-normalize', version: nextVersion, masterData, questionnaire });
 }
@@ -487,9 +561,10 @@ async function handleGetArtifact(article, stepId, name, query) {
       const history = stepMeta.history || [];
       const match = [...history].reverse().find(h => {
         let expected;
-        if (h.imageType)  expected = `${h.size}_${h.imageType}.png`;
+        if (h.imageType)      expected = `${h.size}_${h.imageType}.png`;
         else if (h.videoType) expected = `${h.size}_${h.videoType}.mp4`;
-        else               expected = `${h.size}_texts.json`;
+        else if (h.marketplace) expected = `${h.size}_texts_${h.marketplace}.json`;
+        else                    expected = `${h.size}_texts.json`;
         return expected === name;
       });
       effectiveVersion = match?.version ?? stepMeta.currentVersion;
@@ -542,7 +617,16 @@ async function handleRegenerate(article, stepId, event, item) {
       const manifest  = await store.getManifest(article);
       const stepMeta  = manifest?.steps?.[stepId];
       const runVersion = (stepMeta?.currentVersion ?? 0) + 1;
-      messages = sizes.map(size => ({ article, size, attempt: 1, force, runVersion }));
+      // Generate for both Ozon and WB unless a specific marketplace is requested
+      const marketplace = body.marketplace; // 'ozon' | 'wb' | undefined (both)
+      if (marketplace) {
+        messages = sizes.map(size => ({ article, size, attempt: 1, force, runVersion, marketplace }));
+      } else {
+        messages = sizes.flatMap(size => [
+          { article, size, attempt: 1, force, runVersion, marketplace: 'ozon' },
+          { article, size, attempt: 1, force, runVersion, marketplace: 'wb' },
+        ]);
+      }
     } else if (stepId === '03-images') {
       const manifest3  = await store.getManifest(article);
       const stepMeta3  = manifest3?.steps?.[stepId];
@@ -822,6 +906,90 @@ async function handleSlideFileUpload(article, slideId, event) {
   const existing = slide && Array.isArray(slide.files) ? slide.files : [];
   await patchSlide(article, slideId, { files: [...existing, ...refs] });
   return respond(200, { slideId, refs, ref: refs[0] });
+}
+
+// ---------------------------------------------------------------------------
+// CRUD-01 — delete line + all its S3 artifacts
+// ---------------------------------------------------------------------------
+
+async function handleDeleteLine(article) {
+  const manifest = await store.getManifest(article);
+  if (!manifest) return respond(404, { error: `Article "${article}" not found` });
+  await store.deleteAllArtifacts(article);
+  await store.deleteManifest(article);
+  return respond(200, { ok: true, article });
+}
+
+// ---------------------------------------------------------------------------
+// CRUD-02 — update questionnaire and re-run 01-normalize
+// ---------------------------------------------------------------------------
+
+async function handleUpdateQuestionnaire(article, event) {
+  let questionnaire;
+  try {
+    const raw = event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString('utf8') : event.body;
+    questionnaire = JSON.parse(raw);
+  } catch {
+    return respond(400, { error: 'Invalid JSON body' });
+  }
+  if (!questionnaire || typeof questionnaire !== 'object') {
+    return respond(400, { error: 'questionnaire object required' });
+  }
+  const manifest = await store.getManifest(article);
+  if (!manifest) return respond(404, { error: `Article "${article}" not found` });
+  // Force re-run of step-normalize with the new questionnaire.
+  // handleCreateLine expects { ...questionnaire, force } as body.
+  return handleCreateLine({ body: JSON.stringify({ ...questionnaire, article, force: true }) });
+}
+
+// ---------------------------------------------------------------------------
+// LIM-04 — save manually edited master-data as a new version
+// ---------------------------------------------------------------------------
+
+async function handleUpdateMasterData(article, event) {
+  let body;
+  try {
+    const raw = event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString('utf8') : event.body;
+    body = JSON.parse(raw);
+  } catch {
+    return respond(400, { error: 'Invalid JSON body' });
+  }
+  const { masterData } = body || {};
+  if (!Array.isArray(masterData) || masterData.length === 0) {
+    return respond(400, { error: 'masterData array required' });
+  }
+  const manifest = await store.getManifest(article);
+  if (!manifest) return respond(404, { error: `Article "${article}" not found` });
+  const stepMeta    = manifest.steps?.['01-normalize'];
+  const nextVersion = (stepMeta?.currentVersion ?? 0) + 1;
+  await store.putArtifact(article, '01-normalize', nextVersion, 'master-data.json', Buffer.from(JSON.stringify(masterData, null, 2)));
+  await store.updateManifest(article, '01-normalize', {
+    currentVersion: nextVersion,
+    pushHistory: { version: nextVersion, createdAt: new Date().toISOString(), note: 'Ручное редактирование', inputHash: null },
+  });
+  return respond(200, { article, stepId: '01-normalize', version: nextVersion });
+}
+
+// ---------------------------------------------------------------------------
+// LIM-03 — publish to Ozon or WB (stub; needs marketplace credentials)
+// ---------------------------------------------------------------------------
+
+async function handlePublish(article, marketplace) {
+  const credKey  = marketplace === 'ozon' ? 'OZON_API_KEY' : 'WB_API_KEY';
+  const clientId = marketplace === 'ozon' ? process.env.OZON_CLIENT_ID : undefined;
+  if (!process.env[credKey] || (marketplace === 'ozon' && !clientId)) {
+    const missing = marketplace === 'ozon'
+      ? 'OZON_API_KEY и OZON_CLIENT_ID'
+      : 'WB_API_KEY';
+    return respond(501, {
+      error:    `Публикация на ${marketplace.toUpperCase()} не настроена`,
+      hint:     `Добавьте ${missing} в .env.local, затем повторите`,
+      article,
+      marketplace,
+    });
+  }
+  // Placeholder — actual API call goes here once credentials are wired.
+  return respond(501, { error: 'Интеграция с API маркетплейса ещё не реализована. Экспортируйте Excel и загрузите вручную.' });
 }
 
 // ---------------------------------------------------------------------------

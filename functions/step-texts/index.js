@@ -26,7 +26,7 @@ exports.handler = async (event) => {
   const msg = parseMessage(event);
   if (!msg) return respond(400, { error: 'Invalid message' });
 
-  const { article, size, attempt = 1, feedback = [], force = false, attemptsLog = [], runVersion } = msg;
+  const { article, size, attempt = 1, feedback = [], force = false, attemptsLog = [], runVersion, marketplace } = msg;
 
   // Top-level try/catch (REL-01 / D-06): any throw records { error, failedAt }
   // to the manifest step entry so the frontend can render an 'error' state.
@@ -43,17 +43,33 @@ exports.handler = async (event) => {
 
     // Cache check (only on first attempt without force)
     const stepMeta   = manifest?.steps?.[STEP_ID];
-    const inputHash  = sha256(JSON.stringify({ sizeRecord, promptsTmpl }));
+    const inputHash  = sha256(JSON.stringify({ sizeRecord, promptsTmpl, marketplace }));
+    const artifactName = marketplace ? `${size}_texts_${marketplace}.json` : `${size}_texts.json`;
 
     if (attempt === 1 && !force && stepMeta) {
-      const last = stepMeta.history?.[stepMeta.history.length - 1];
+      const last = (stepMeta.history || []).filter(h => h.marketplace === (marketplace || undefined)).slice(-1)[0];
       if (last?.inputHash === inputHash && last?.needsReview === false) {
-        return respond(200, { skipped: true, article, size, stepId: STEP_ID });
+        return respond(200, { skipped: true, article, size, stepId: STEP_ID, marketplace });
       }
     }
 
+    // GAP-02: user-provided texts bypass AI generation
+    const userTexts = sizeRecord.userTexts || {};
+    const hasUserTexts = ['titleShort', 'titleFull', 'annotation'].every(f => userTexts[f]);
+    if (hasUserTexts) {
+      const generated = { titleShort: userTexts.titleShort, titleFull: userTexts.titleFull, annotation: userTexts.annotation };
+      const nextVersion  = runVersion ?? (stepMeta?.currentVersion ?? 0) + 1;
+      await store.putArtifact(article, STEP_ID, nextVersion, artifactName, Buffer.from(JSON.stringify({ size, texts: generated, userProvided: true }, null, 2)));
+      await store.updateManifest(article, STEP_ID, {
+        currentVersion: nextVersion,
+        pushHistory: { version: nextVersion, size, marketplace, createdAt: new Date().toISOString(), inputHash, needsReview: false, userProvided: true, attempts: [] },
+        error: null, failedAt: null,
+      });
+      return respond(200, { article, size, stepId: STEP_ID, version: nextVersion, userProvided: true, texts: generated });
+    }
+
     // --- Generate ---
-    const generated = await generateTexts(sizeRecord, feedback);
+    const generated = await generateTexts(sizeRecord, feedback, marketplace);
 
     // --- Critic (rule-based) ---
     const criticVerdict = runCritic(generated, sizeRecord.topic);
@@ -67,16 +83,17 @@ exports.handler = async (event) => {
       const nextVersion  = runVersion ?? (stepMeta?.currentVersion ?? 0) + 1;
       const needsReview  = !criticVerdict.ok; // exhausted attempts
 
-      const payload = { size, texts: generated, needsReview, criticVerdict };
+      const payload = { size, texts: generated, needsReview, criticVerdict, marketplace };
       await store.putArtifact(
         article, STEP_ID, nextVersion,
-        `${size}_texts.json`,
+        artifactName,
         Buffer.from(JSON.stringify(payload, null, 2))
       );
 
       const historyEntry = {
         version: nextVersion,
         size,
+        marketplace,
         createdAt: new Date().toISOString(),
         inputHash,
         needsReview,
@@ -95,9 +112,9 @@ exports.handler = async (event) => {
     }
 
     // Critic rejected — recurse directly (local retry, no YMQ).
-    // Carry runVersion forward so retries write into the same pinned run version.
+    // Carry runVersion and marketplace forward so retries write into the same pinned run version.
     return exports.handler({ body: JSON.stringify({
-      article, size, attempt: attempt + 1, feedback: criticVerdict.issues, force, runVersion,
+      article, size, attempt: attempt + 1, feedback: criticVerdict.issues, force, runVersion, marketplace,
       attemptsLog: [...attemptsLog, { attempt, criticVerdict }],
     }) });
   } catch (err) {
@@ -110,12 +127,18 @@ exports.handler = async (event) => {
 // Text generation (calls OpenAI API)
 // ---------------------------------------------------------------------------
 
-async function generateTexts(sizeRecord, feedback) {
+async function generateTexts(sizeRecord, feedback, marketplace) {
   const openrouterKey = process.env.OPENROUTER_API_KEY;
   const openaiKey     = process.env.OPENAI_API_KEY;
 
   const feedbackBlock = feedback.length > 0
     ? promptsTmpl.feedbackBlock.replace('{{issues}}', feedback.map(i => `• ${i}`).join('\n'))
+    : '';
+
+  const marketplaceHint = marketplace === 'ozon'
+    ? '\n\nЦелевой маркетплейс: Ozon. Учти требования Ozon: богатый контент, ключевые слова для поиска.'
+    : marketplace === 'wb'
+    ? '\n\nЦелевой маркетплейс: Wildberries. Учти требования WB: короткие ёмкие заголовки, популярные поисковые запросы WB.'
     : '';
 
   const userPrompt = promptsTmpl.generate.user
@@ -129,7 +152,8 @@ async function generateTexts(sizeRecord, feedback) {
     .replace('{{brand}}',         sizeRecord.brand)
     .replace('{{topic}}',         sizeRecord.topic)
     .replace('{{purpose}}',       sizeRecord.purpose)
-    .replace('{{feedbackBlock}}', feedbackBlock);
+    .replace('{{feedbackBlock}}', feedbackBlock)
+    + marketplaceHint;
 
   if (!openrouterKey && !openaiKey) {
     throw new Error('No API key set: OPENROUTER_API_KEY or OPENAI_API_KEY required');

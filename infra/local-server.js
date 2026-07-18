@@ -53,6 +53,7 @@ console.log(`[local-server] OPENAI_BASE_URL  : ${process.env.OPENAI_BASE_URL  ||
 console.log(`[local-server] OPENAI_IMAGE_MODEL: ${process.env.OPENAI_IMAGE_MODEL || '(not set, default gpt-image-1)'}`);
 console.log(`[local-server] OPENROUTER_API_KEY: ${process.env.OPENROUTER_API_KEY ? process.env.OPENROUTER_API_KEY.slice(0,6)+'***' : '(not set)'}`);
 console.log(`[local-server] STORE_ADAPTER    : ${process.env.STORE_ADAPTER    || '(not set, default yandex-cloud)'}`);
+console.log(`[local-server] WEBHOOK_URL      : ${process.env.WEBHOOK_URL      || '(not set — step-completion notifications disabled)'}`);
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -163,7 +164,7 @@ http.createServer(async (req, res) => {
 function corsHeaders() {
   return {
     'Access-Control-Allow-Origin':  '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
 }

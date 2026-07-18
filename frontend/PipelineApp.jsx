@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Layers, Type, Image as ImageIcon, Film, FileSpreadsheet, Folder,
   ChevronDown, RotateCcw, Plus, Upload, Check, Play, Download, X,
-  Trash2, Loader2, Paperclip,
+  Trash2, Loader2, Paperclip, Edit3, Globe, Save, Pencil,
 } from 'lucide-react';
 
 // Base URL for API Gateway. Set VITE_API_BASE_URL in .env to point at the deployed gateway.
@@ -19,9 +19,12 @@ async function apiFetch(path, opts = {}) {
 }
 
 // Multipart submission — do NOT use apiFetch (it sets Content-Type: application/json which breaks the boundary)
-async function submitQuestionnaire(questionnaire, photoFiles) {
+async function submitQuestionnaire(questionnaire, photoFiles, photoTypes) {
   const fd = new FormData();
   fd.append('questionnaire', JSON.stringify(questionnaire));
+  if (photoTypes && Object.keys(photoTypes).length > 0) {
+    fd.append('photoTypes', JSON.stringify(photoTypes));
+  }
   for (const file of photoFiles) {
     fd.append('photos', file, file.name);
   }
@@ -187,8 +190,12 @@ function apiArrayToRows(arr) {
   }));
 }
 
-function NormalizeView({ line, manifest }) {
-  const [rows, setRows] = useState(null);
+function NormalizeView({ line, manifest, showToast }) {
+  const [rows, setRows]         = useState(null);
+  const [rawData, setRawData]   = useState(null); // full masterData array for editing
+  const [editMode, setEditMode] = useState(false);
+  const [editData, setEditData] = useState(null); // { label → { size → value } }
+  const [saving, setSaving]     = useState(false);
 
   useEffect(() => {
     const stepMeta = manifest?.steps?.['01-normalize'];
@@ -196,84 +203,169 @@ function NormalizeView({ line, manifest }) {
       apiFetch(`/lines/${line.id}/steps/01-normalize`)
         .then(res => {
           const arr = res.data?.['master-data.json'];
-          if (Array.isArray(arr)) setRows(apiArrayToRows(arr));
+          if (Array.isArray(arr)) { setRawData(arr); setRows(apiArrayToRows(arr)); }
         })
-        .catch(() => { setRows(null); });
+        .catch(() => { setRows(null); setRawData(null); });
     } else {
-      setRows(null);
+      setRows(null); setRawData(null);
     }
   }, [line.id, manifest]);
+
+  const startEdit = () => {
+    if (!rows) return;
+    const copy = {};
+    for (const row of rows) copy[row.label] = { ...row.values };
+    setEditData(copy);
+    setEditMode(true);
+  };
+
+  const cancelEdit = () => { setEditMode(false); setEditData(null); };
+
+  const saveEdit = async () => {
+    if (!rawData || !editData) return;
+    setSaving(true);
+    try {
+      // Merge edited numeric fields back into rawData array
+      const updatedMaster = rawData.map(sizeRow => {
+        const patched = { ...sizeRow };
+        for (const row of rows) {
+          const key = Object.entries(sizeRow).find(([k, v]) => row.label === NORMALIZE_FIELDS.find(f => f.key === k)?.label)?.[0];
+          if (key && editData[row.label]?.[sizeRow.size] !== undefined) {
+            patched[key] = Number(editData[row.label][sizeRow.size]) || 0;
+          }
+        }
+        return patched;
+      });
+      await apiFetch(`/lines/${line.id}/master-data`, { method: 'PUT', body: JSON.stringify({ masterData: updatedMaster }) });
+      setRawData(updatedMaster);
+      setRows(apiArrayToRows(updatedMaster));
+      setEditMode(false);
+      setEditData(null);
+      showToast?.('Мастер-данные сохранены');
+    } catch (err) {
+      showToast?.(`Ошибка сохранения: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (!rows) {
     return <p className="text-sm pp-muted p-4">Мастер-данные ещё не созданы. Нажмите «Запустить шаг».</p>;
   }
 
   return (
-    <div className="pp-card rounded-lg overflow-hidden">
-      <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
-        <thead>
-          <tr className="pp-line border-b">
-            <th className="text-left p-3 font-medium pp-muted" style={{ minWidth: 180 }}>Параметр</th>
-            {ALL_SIZES.map((s) => (
-              <th
-                key={s}
-                className={`p-3 text-right font-medium pp-mono ${line.sizes.includes(s) ? '' : 'pp-muted'}`}
-                style={{ background: s === 'M' && line.sizes.includes(s) ? 'var(--lavender-soft)' : 'transparent' }}
-              >
-                {s}{s === 'M' ? ' ·' : ''}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={row.label} style={{ borderTop: '1px solid var(--line)', background: i % 2 ? 'transparent' : 'transparent' }}>
-              <td className="p-3 pp-muted">{row.label}</td>
+    <div>
+      <div className="flex items-center justify-end mb-2 gap-2">
+        {editMode ? (<>
+          <button className="pp-btn" onClick={cancelEdit}><X size={13} /> Отменить</button>
+          <button className="pp-btn pp-btn-primary" onClick={saveEdit} disabled={saving}>
+            <Save size={13} /> {saving ? 'Сохранение…' : 'Сохранить'}
+          </button>
+        </>) : (
+          <button className="pp-btn" onClick={startEdit}><Pencil size={13} /> Редактировать</button>
+        )}
+      </div>
+      <div className="pp-card rounded-lg overflow-hidden">
+        <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
+          <thead>
+            <tr className="pp-line border-b">
+              <th className="text-left p-3 font-medium pp-muted" style={{ minWidth: 180 }}>Параметр</th>
               {ALL_SIZES.map((s) => (
-                <td
+                <th
                   key={s}
-                  className="p-3 text-right pp-mono"
+                  className={`p-3 text-right font-medium pp-mono ${line.sizes.includes(s) ? '' : 'pp-muted'}`}
                   style={{ background: s === 'M' && line.sizes.includes(s) ? 'var(--lavender-soft)' : 'transparent' }}
                 >
-                  {row.values[s] !== undefined ? row.values[s] : '—'}
-                </td>
+                  {s}{s === 'M' ? ' ·' : ''}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.label} style={{ borderTop: '1px solid var(--line)' }}>
+                <td className="p-3 pp-muted">{row.label}</td>
+                {ALL_SIZES.map((s) => (
+                  <td
+                    key={s}
+                    className="p-1 text-right"
+                    style={{ background: s === 'M' && line.sizes.includes(s) ? 'var(--lavender-soft)' : 'transparent' }}
+                  >
+                    {editMode && editData ? (
+                      <input
+                        type="number" step="0.01"
+                        className="pp-input pp-mono text-right"
+                        style={{ padding: '3px 5px', fontSize: 12, width: 70 }}
+                        value={editData[row.label]?.[s] ?? ''}
+                        onChange={e => setEditData(prev => ({
+                          ...prev,
+                          [row.label]: { ...prev[row.label], [s]: e.target.value },
+                        }))}
+                      />
+                    ) : (
+                      <span className="pp-mono" style={{ padding: '0 8px', display: 'inline-block' }}>
+                        {row.values[s] !== undefined ? row.values[s] : '—'}
+                      </span>
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
 function TextsView({ line, manifest }) {
-  const [textsData, setTextsData] = useState(null);
+  const [textsData, setTextsData] = useState({});
+  const [marketplace, setMarketplace] = useState('ozon');
 
   useEffect(() => {
     const stepMeta = manifest?.steps?.['02-texts'];
-    if (stepMeta) {
-      apiFetch(`/lines/${line.id}/steps/02-texts`)
-        .then(res => {
-          const bySize = {};
-          for (const [name, payload] of Object.entries(res.data || {})) {
-            const size = name.replace('_texts.json', '');
-            bySize[size] = payload.texts || payload;
+    if (!stepMeta) { setTextsData({}); return; }
+    apiFetch(`/lines/${line.id}/steps/02-texts`)
+      .then(res => {
+        const all = {};
+        for (const [name, payload] of Object.entries(res.data || {})) {
+          // name: {size}_texts_{marketplace}.json  OR  {size}_texts.json (legacy)
+          const mpMatch = name.match(/^([A-Z]+)_texts_(ozon|wb)\.json$/);
+          const legMatch = name.match(/^([A-Z]+)_texts\.json$/);
+          if (mpMatch) {
+            const [, size, mp] = mpMatch;
+            (all[mp] ||= {})[size] = payload.texts || payload;
+          } else if (legMatch) {
+            const [, size] = legMatch;
+            // Store under both marketplaces as fallback
+            const t = payload.texts || payload;
+            (all.ozon ||= {})[size] ||= t;
+            (all.wb   ||= {})[size] ||= t;
           }
-          setTextsData(bySize);
-        })
-        .catch(() => { setTextsData({}); });
-    } else {
-      setTextsData({});
-    }
+        }
+        setTextsData(all);
+      })
+      .catch(() => setTextsData({}));
   }, [line.id, manifest]);
 
-  const texts = textsData || {};
+  const texts = textsData[marketplace] || {};
   const hasTextsStep = Boolean(manifest?.steps?.['02-texts']);
+  const hasMarketplace = Boolean(textsData.ozon || textsData.wb);
+
   return (
     <div className="grid grid-cols-1 gap-3">
-      {!hasTextsStep && (
-        <p className="text-sm pp-muted">Тексты для размера ещё не сгенерированы. Нажмите «Запустить шаг».</p>
+      {hasMarketplace && (
+        <div className="flex gap-1 pp-line border rounded-lg p-1" style={{ width: 'fit-content' }}>
+          {[['ozon', 'Ozon'], ['wb', 'WB']].map(([mp, label]) => (
+            <button key={mp} onClick={() => setMarketplace(mp)}
+              className="text-sm px-3 py-1 rounded-md"
+              style={{ background: marketplace === mp ? 'var(--lavender)' : 'transparent', color: marketplace === mp ? '#fff' : 'var(--ink)' }}>
+              {label}
+            </button>
+          ))}
+        </div>
       )}
+      {!hasTextsStep && <p className="text-sm pp-muted">Тексты ещё не сгенерированы. Нажмите «Запустить шаг».</p>}
       {line.sizes.map((s) => {
         const t = texts[s];
         return (
@@ -496,6 +588,37 @@ function ImagesView({ line, manifest, showToast, onImagesRunning }) {
                     style={!hasPrompt ? { color: 'var(--muted)', background: 'var(--paper)' } : undefined}
                   />
 
+                  {/* GAP-01: background image upload */}
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    <label className="pp-btn pp-btn-ghost" aria-label="Загрузить фон" title="Загрузить фон слайда" style={{ cursor: 'pointer', fontSize: 12 }}>
+                      <ImageIcon size={14} aria-hidden="true" /> Фон
+                      <input type="file" accept="image/*" style={{ display: 'none' }} onChange={async (e) => {
+                        const f = e.target.files?.[0];
+                        if (!f) return;
+                        const fd = new FormData();
+                        fd.append('files', f, f.name);
+                        try {
+                          const res = await fetch(`${API_BASE}/lines/${line.id}/slides/${slide.id}/files`, { method: 'POST', body: fd });
+                          if (!res.ok) throw new Error(res.status);
+                          const data = await res.json();
+                          const ref = data.refs?.[0] || data.ref;
+                          if (ref) updateSlide(slide.id, { backgroundRef: ref });
+                          showToast('Фон загружен');
+                        } catch (err) { showToast(`Ошибка загрузки фона: ${err.message}`); }
+                        e.target.value = '';
+                      }} />
+                    </label>
+                    {slide.backgroundRef && (
+                      <span className="pp-mono text-xs flex items-center gap-1 rounded-md px-2 py-0.5"
+                        style={{ background: 'var(--sage-soft)', border: '1px solid var(--sage)', color: 'var(--sage-dark)' }}>
+                        {slide.backgroundRef.split('/').pop()}
+                        <button className="pp-btn-ghost" style={{ padding: 0 }} onClick={() => updateSlide(slide.id, { backgroundRef: null })}>
+                          <X size={12} aria-hidden="true" />
+                        </button>
+                      </span>
+                    )}
+                  </div>
+
                   {/* Reference-file attachments (D-09) */}
                   <div className="flex items-center gap-2 mt-2 flex-wrap">
                     <label className="pp-btn pp-btn-ghost" aria-label="Прикрепить файлы" title="Прикрепить файлы" style={{ cursor: 'pointer' }}>
@@ -637,7 +760,7 @@ function VideoView({ line, manifest, onRegenItem }) {
   );
 }
 
-function ExcelView({ line, manifest }) {
+function ExcelView({ line, manifest, showToast }) {
   const excelMeta = manifest?.steps?.['05-excel'];
   if (!excelMeta) {
     return <div className="pp-card rounded-lg p-6 text-center text-sm pp-muted">Выгрузка не сформирована</div>;
@@ -646,20 +769,45 @@ function ExcelView({ line, manifest }) {
   const date = lastEntry?.createdAt
     ? new Date(lastEntry.createdAt).toLocaleDateString('ru', { day: '2-digit', month: 'short' })
     : null;
+
+  const publish = async (mp) => {
+    try {
+      const res = await apiFetch(`/lines/${line.id}/publish/${mp}`, { method: 'POST' });
+      showToast?.(res.error || 'Публикация запущена');
+    } catch (err) {
+      showToast?.(err.message);
+    }
+  };
+
   return (
-    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-      {['Ozon', 'Wildberries'].map((mp) => (
-        <div key={mp} className="pp-card rounded-lg p-4 flex items-center justify-between">
-          <div>
-            <div className="text-sm font-medium mb-1">{mp}</div>
-            <div className="text-xs pp-muted pp-mono">{line.id}_{mp.toLowerCase().slice(0, 4)}.xlsx</div>
-            <div className="text-xs pp-muted mt-1">{line.sizes.length} строк{date ? ` · ${date}` : ''}</div>
-          </div>
-          <button className="pp-btn" aria-label={`Скачать выгрузку для ${mp}`}>
-            <Download size={14} aria-hidden="true" />
-          </button>
-        </div>
-      ))}
+    <div className="flex flex-col gap-4">
+      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+        {[['ozon', 'Ozon'], ['wb', 'Wildberries']].map(([mpKey, mpLabel]) => {
+          const fileName = `${line.id}_${mpKey}.xlsx`;
+          const artifactUrl = excelMeta?.currentVersion
+            ? `${API_BASE}/lines/${line.id}/steps/05-excel/artifacts/${fileName}?version=${excelMeta.currentVersion}`
+            : null;
+          return (
+            <div key={mpKey} className="pp-card rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <div className="text-sm font-medium mb-1">{mpLabel}</div>
+                  <div className="text-xs pp-muted pp-mono">{fileName}</div>
+                  <div className="text-xs pp-muted mt-1">{line.sizes.length} строк{date ? ` · ${date}` : ''}</div>
+                </div>
+                {artifactUrl && (
+                  <a href={artifactUrl} download={fileName} className="pp-btn" aria-label={`Скачать ${mpLabel}`}>
+                    <Download size={14} aria-hidden="true" />
+                  </a>
+                )}
+              </div>
+              <button className="pp-btn w-full" style={{ justifyContent: 'center' }} onClick={() => publish(mpKey)}>
+                <Globe size={13} aria-hidden="true" /> Опубликовать на {mpLabel}
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -792,14 +940,61 @@ const SIZE_FIELDS = [
   { key: 'moldWeight', label: 'Вес, г' },
 ];
 
-function QuestionnaireForm({ onSubmit, loading }) {
-  const [form, setForm] = useState({
-    moldName: '', article: '', brand: 'ТопМолд', theme: '', color: '', priceBaseM: 1000,
-    moldType: 'face',
-    sizes: ALL_SIZES.map(size => ({ size, ...SIZE_DEFAULTS[size] })),
-    artifacts: { images: true, video: true, ozon: true, wb: true },
+const PHOTO_TYPES = [
+  { value: 'mold',      label: 'Молд',     slide: 'main' },
+  { value: 'casting',   label: 'Отливка',  slide: 'infographic' },
+  { value: 'lifestyle', label: 'Лайфстайл', slide: 'lifestyle' },
+];
+
+function QuestionnaireForm({ onSubmit, loading, initialData, isEdit }) {
+  const initForm = (d) => ({
+    moldName:   d?.moldName   ?? '',
+    article:    d?.article    ?? '',
+    brand:      d?.brand      ?? 'ТопМолд',
+    theme:      d?.theme      ?? '',
+    color:      d?.color      ?? '',
+    priceBaseM: d?.priceBaseM ?? 1000,
+    moldType:   d?.moldType   ?? 'face',
+    sizes: d?.sizes
+      ? ALL_SIZES.map(size => {
+          const row = (d.sizes || []).find(r => (typeof r === 'string' ? r : r.size) === size);
+          return typeof row === 'object' && row ? { ...SIZE_DEFAULTS[size], ...row, size } : { size, ...SIZE_DEFAULTS[size] };
+        })
+      : ALL_SIZES.map(size => ({ size, ...SIZE_DEFAULTS[size] })),
+    artifacts: {
+      images: Array.isArray(d?.artifacts) ? d.artifacts.includes('images') : true,
+      video:  Array.isArray(d?.artifacts) ? d.artifacts.includes('video')  : true,
+      ozon:   Array.isArray(d?.artifacts) ? d.artifacts.includes('excel-ozon') : true,
+      wb:     Array.isArray(d?.artifacts) ? d.artifacts.includes('excel-wb')   : true,
+    },
   });
+
+  const [form, setForm]             = useState(() => initForm(initialData));
   const [photoFiles, setPhotoFiles] = useState([]);
+  const [photoTypes, setPhotoTypes] = useState({}); // { filename → 'mold'|'casting'|'lifestyle' }
+  const [userTexts, setUserTexts]   = useState({    // GAP-02: optional manual texts
+    titleShort: initialData?.userTexts?.titleShort ?? '',
+    titleFull:  initialData?.userTexts?.titleFull  ?? '',
+    annotation: initialData?.userTexts?.annotation ?? '',
+  });
+  const [showUserTexts, setShowUserTexts] = useState(Boolean(
+    initialData?.userTexts?.titleShort || initialData?.userTexts?.titleFull || initialData?.userTexts?.annotation
+  ));
+
+  // Re-initialize when initialData changes (e.g., user switches between lines)
+  useEffect(() => {
+    setForm(initForm(initialData));
+    setUserTexts({
+      titleShort: initialData?.userTexts?.titleShort ?? '',
+      titleFull:  initialData?.userTexts?.titleFull  ?? '',
+      annotation: initialData?.userTexts?.annotation ?? '',
+    });
+    setShowUserTexts(Boolean(
+      initialData?.userTexts?.titleShort || initialData?.userTexts?.titleFull || initialData?.userTexts?.annotation
+    ));
+    setPhotoFiles([]);
+    setPhotoTypes({});
+  }, [initialData?.article]);
 
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
   const toggleArtifact = (key) => setForm((f) => ({ ...f, artifacts: { ...f.artifacts, [key]: !f.artifacts[key] } }));
@@ -808,27 +1003,52 @@ function QuestionnaireForm({ onSubmit, loading }) {
     sizes: f.sizes.map(r => r.size === size ? { ...r, [field]: parseFloat(value) || 0 } : r),
   }));
 
-  const buildQuestionnaire = () => ({
-    moldName:   form.moldName,
-    article:    form.article,
-    brand:      form.brand,
-    theme:      form.theme,
-    color:      form.color,
-    priceBaseM: Number(form.priceBaseM),
-    moldType:   form.moldType,
-    sizes:      form.sizes,
-    artifacts:  [
-      form.artifacts.images && 'images',
-      form.artifacts.video  && 'video',
-      form.artifacts.ozon   && 'excel-ozon',
-      form.artifacts.wb     && 'excel-wb',
-    ].filter(Boolean),
-  });
+  const onFilesChange = (e) => {
+    const files = Array.from(e.target.files || []);
+    setPhotoFiles(files);
+    // Default all new files to 'mold' type
+    setPhotoTypes(prev => {
+      const next = { ...prev };
+      for (const f of files) if (!next[f.name]) next[f.name] = 'mold';
+      return next;
+    });
+  };
+
+  const buildQuestionnaire = () => {
+    const ut = showUserTexts ? { ...userTexts } : {};
+    // Strip empty fields so step-texts only skips if ALL three are filled
+    Object.keys(ut).forEach(k => { if (!ut[k]) delete ut[k]; });
+    return {
+      moldName:   form.moldName,
+      article:    form.article,
+      brand:      form.brand,
+      theme:      form.theme,
+      color:      form.color,
+      priceBaseM: Number(form.priceBaseM),
+      moldType:   form.moldType,
+      sizes:      form.sizes,
+      artifacts:  [
+        form.artifacts.images && 'images',
+        form.artifacts.video  && 'video',
+        form.artifacts.ozon   && 'excel-ozon',
+        form.artifacts.wb     && 'excel-wb',
+      ].filter(Boolean),
+      ...(Object.keys(ut).length > 0 ? { userTexts: ut } : {}),
+    };
+  };
+
+  const needsPhoto = !isEdit && photoFiles.length === 0;
 
   return (
     <div className="pp-card rounded-lg p-5 max-w-3xl">
-      <h2 className="pp-display text-lg mb-1" style={{ fontWeight: 500 }}>Новая линейка молда</h2>
-      <p className="text-sm pp-muted mb-4">Заполните поля — пайплайн посчитает цены и тексты, физические параметры задайте вручную.</p>
+      <h2 className="pp-display text-lg mb-1" style={{ fontWeight: 500 }}>
+        {isEdit ? 'Редактировать опросник' : 'Новая линейка молда'}
+      </h2>
+      <p className="text-sm pp-muted mb-4">
+        {isEdit
+          ? 'Внесите изменения — нормализация перезапустится, история версий сохранится.'
+          : 'Заполните поля — пайплайн посчитает цены и тексты, физические параметры задайте вручную.'}
+      </p>
 
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div>
@@ -837,7 +1057,10 @@ function QuestionnaireForm({ onSubmit, loading }) {
         </div>
         <div>
           <label className="pp-label">Артикульная серия</label>
-          <input className="pp-input pp-mono" placeholder="напр. 0553" value={form.article} onChange={(e) => set('article', e.target.value)} />
+          <input className="pp-input pp-mono" placeholder="напр. 0553" value={form.article}
+            readOnly={isEdit}
+            style={isEdit ? { background: 'var(--paper)', color: 'var(--muted)' } : undefined}
+            onChange={(e) => !isEdit && set('article', e.target.value)} />
         </div>
       </div>
 
@@ -895,8 +1118,7 @@ function QuestionnaireForm({ onSubmit, loading }) {
                   {SIZE_FIELDS.map(f => (
                     <td key={f.key} className="p-1">
                       <input
-                        type="number"
-                        step="0.01"
+                        type="number" step="0.01"
                         className="pp-input pp-mono text-right"
                         style={{ padding: '4px 6px', fontSize: 12 }}
                         value={row[f.key]}
@@ -911,17 +1133,54 @@ function QuestionnaireForm({ onSubmit, loading }) {
         </div>
       </div>
 
+      {/* GAP-02: optional user-supplied texts */}
       <div className="mb-4">
-        <label className="pp-label">Фото молда</label>
-        <input
-          type="file"
-          multiple
-          accept="image/*"
-          className="pp-input"
-          onChange={(e) => setPhotoFiles(Array.from(e.target.files || []))}
-        />
+        <label className="flex items-center gap-2 text-sm mb-2" style={{ cursor: 'pointer' }}>
+          <input type="checkbox" checked={showUserTexts} onChange={e => setShowUserTexts(e.target.checked)} />
+          Задать тексты вручную (иначе AI сгенерирует)
+        </label>
+        {showUserTexts && (
+          <div className="flex flex-col gap-2 pp-card rounded-lg p-3" style={{ background: 'var(--lavender-soft)' }}>
+            <div>
+              <label className="pp-label">Короткий заголовок (≤ 30 симв.)</label>
+              <input className="pp-input" maxLength={30} value={userTexts.titleShort}
+                onChange={e => setUserTexts(t => ({ ...t, titleShort: e.target.value }))} />
+            </div>
+            <div>
+              <label className="pp-label">Полный заголовок (≤ 200 симв.)</label>
+              <input className="pp-input" maxLength={200} value={userTexts.titleFull}
+                onChange={e => setUserTexts(t => ({ ...t, titleFull: e.target.value }))} />
+            </div>
+            <div>
+              <label className="pp-label">Описание / аннотация (≤ 200 симв.)</label>
+              <textarea className="pp-textarea" rows={3} maxLength={200} value={userTexts.annotation}
+                onChange={e => setUserTexts(t => ({ ...t, annotation: e.target.value }))} />
+            </div>
+            <p className="text-xs pp-muted">Если заполнены все три поля — AI-генерация текстов пропускается</p>
+          </div>
+        )}
+      </div>
+
+      {/* GAP-03: photo upload with type tagging */}
+      <div className="mb-4">
+        <label className="pp-label">Фото молда{isEdit ? ' (необязательно при редактировании)' : ''}</label>
+        <input type="file" multiple accept="image/*" className="pp-input"
+          onChange={onFilesChange} />
         {photoFiles.length > 0 && (
-          <span className="text-xs pp-muted mt-1" style={{ display: 'block' }}>{photoFiles.length} файл(ов) выбрано</span>
+          <div className="flex flex-col gap-1 mt-2">
+            {photoFiles.map(f => (
+              <div key={f.name} className="flex items-center gap-3 text-xs">
+                <span className="pp-muted flex-1 truncate">{f.name}</span>
+                <select
+                  className="pp-select" style={{ width: 'auto', fontSize: 12, padding: '3px 6px' }}
+                  value={photoTypes[f.name] || 'mold'}
+                  onChange={e => setPhotoTypes(prev => ({ ...prev, [f.name]: e.target.value }))}>
+                  {PHOTO_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </div>
+            ))}
+            <p className="text-xs pp-muted mt-1">Тип определяет, к какому слайду автоматически прикрепится фото</p>
+          </div>
         )}
       </div>
 
@@ -942,10 +1201,15 @@ function QuestionnaireForm({ onSubmit, loading }) {
         </div>
       </div>
 
-      {!form.article && <p className="text-xs mb-2" style={{ color: 'var(--clay-dark)' }}>Заполните поле «Артикульная серия» перед отправкой</p>}
-      {photoFiles.length === 0 && <p className="text-xs mb-2" style={{ color: 'var(--clay-dark)' }}>Прикрепите хотя бы одно фото молда</p>}
-      <button className="pp-btn pp-btn-primary" disabled={loading || !form.article || !form.moldName || photoFiles.length === 0} onClick={() => onSubmit(buildQuestionnaire(), photoFiles)}>
-        <Plus size={14} aria-hidden="true" /> {loading ? 'Запускаем…' : 'Сохранить и запустить пайплайн'}
+      {!isEdit && !form.article && <p className="text-xs mb-2" style={{ color: 'var(--clay-dark)' }}>Заполните поле «Артикульная серия» перед отправкой</p>}
+      {needsPhoto && <p className="text-xs mb-2" style={{ color: 'var(--clay-dark)' }}>Прикрепите хотя бы одно фото молда</p>}
+      <button
+        className="pp-btn pp-btn-primary"
+        disabled={loading || !form.article || !form.moldName || needsPhoto}
+        onClick={() => onSubmit(buildQuestionnaire(), photoFiles, photoTypes)}>
+        {isEdit
+          ? <><Save size={14} aria-hidden="true" /> {loading ? 'Обновляем…' : 'Обновить и перезапустить'}</>
+          : <><Plus size={14} aria-hidden="true" /> {loading ? 'Запускаем…' : 'Сохранить и запустить пайплайн'}</>}
       </button>
     </div>
   );
@@ -996,9 +1260,11 @@ export default function PipelineApp() {
   const [toast, setToast]           = useState(null);
   const [listError, setListError]   = useState(null);
   const [listLoading, setListLoading] = useState(true);
-  const [runningSteps, setRunningSteps] = useState({}); // `${lineId}.${stepKey}` → true (optimistic running, D-02)
+  const [runningSteps, setRunningSteps] = useState({});
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput]     = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(null); // { id, name }
+  const [questionnaireData, setQuestionnaireData] = useState(null); // loaded when Опросник tab opens
 
   // Fetch lines list on mount
   useEffect(() => {
@@ -1112,10 +1378,64 @@ export default function PipelineApp() {
     }
   };
 
-  const handleFormSubmit = async (questionnaire, photoFiles) => {
+  // CRUD-01: delete line + all its artifacts
+  const deleteLine = async (id) => {
+    try {
+      await apiFetch(`/lines/${id}`, { method: 'DELETE' });
+      setLines(prev => prev.filter(l => l.id !== id));
+      if (activeLineId === id) {
+        const remaining = lines.filter(l => l.id !== id);
+        setActiveLineId(remaining[0]?.id ?? null);
+        setActiveTab('results');
+      }
+      showToast('Линейка удалена');
+    } catch (err) {
+      showToast(`Ошибка удаления: ${err.message}`);
+    } finally {
+      setConfirmDelete(null);
+    }
+  };
+
+  // CRUD-02: load questionnaire when "Опросник" tab opens for an existing line
+  const openQuestionnaireTab = useCallback(async (lineId) => {
+    setActiveTab('form');
+    setQuestionnaireData(null);
+    const manifest = manifests[lineId] || await apiFetch(`/lines/${lineId}/manifest`).catch(() => null);
+    const history  = manifest?.steps?.['01-normalize']?.history ?? [];
+    const last     = [...history].reverse().find(h => h.questionnaire);
+    setQuestionnaireData(last?.questionnaire ?? null);
+  }, [manifests]);
+
+  // CRUD-02: submit updated questionnaire via PUT
+  const handleUpdateQuestionnaire = async (questionnaire, photoFiles, photoTypes) => {
     setFormLoading(true);
     try {
-      const res = await submitQuestionnaire(questionnaire, photoFiles);
+      if (photoFiles && photoFiles.length > 0) {
+        // Re-upload new photos alongside the update
+        const fd = new FormData();
+        fd.append('questionnaire', JSON.stringify(questionnaire));
+        fd.append('photoTypes', JSON.stringify(photoTypes || {}));
+        fd.append('force', 'true');
+        for (const f of photoFiles) fd.append('photos', f, f.name);
+        const res = await fetch(`${API_BASE}/lines`, { method: 'POST', body: fd });
+        if (!res.ok) throw new Error(`POST /lines → ${res.status}`);
+      } else {
+        await apiFetch(`/lines/${activeLineId}/questionnaire`, { method: 'PUT', body: JSON.stringify(questionnaire) });
+      }
+      showToast('Опросник обновлён, нормализация перезапущена');
+      setActiveTab('results');
+      refreshManifest(activeLineId);
+    } catch (err) {
+      showToast(`Ошибка обновления: ${err.message}`);
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleFormSubmit = async (questionnaire, photoFiles, photoTypes) => {
+    setFormLoading(true);
+    try {
+      const res = await submitQuestionnaire(questionnaire, photoFiles, photoTypes);
       showToast('Опросник сохранён, пайплайн запущен');
       // Append the newly-created line to the sidebar without a page reload (UI-02 / D-10).
       // Use the same id/name/sizes mapping shape as the mount effect so the new row matches.
@@ -1146,11 +1466,11 @@ export default function PipelineApp() {
 
   const renderStep = () => {
     switch (activeStep) {
-      case 'normalize': return <NormalizeView line={line} manifest={manifests[activeLineId]} />;
+      case 'normalize': return <NormalizeView line={line} manifest={manifests[activeLineId]} showToast={showToast} />;
       case 'texts': return <TextsView line={line} manifest={manifests[activeLineId]} />;
       case 'images': return <ImagesView line={line} manifest={manifests[activeLineId]} showToast={showToast} onImagesRunning={markImagesRunning} />;
       case 'video': return <VideoView line={line} manifest={manifests[activeLineId]} onRegenItem={handleRegenerateItem} />;
-      case 'excel': return <ExcelView line={line} manifest={manifests[activeLineId]} />;
+      case 'excel': return <ExcelView line={line} manifest={manifests[activeLineId]} showToast={showToast} />;
       case 'assemble': return <AssembleView line={line} manifest={manifests[activeLineId]} />;
       default: return null;
     }
@@ -1159,8 +1479,25 @@ export default function PipelineApp() {
   return (
     <div className="pp-root" style={{ minHeight: 600 }}>
       <style>{STYLES}</style>
-      <div className="flex" style={{ minHeight: 600 }}>
 
+      {/* CRUD-01: delete confirmation modal */}
+      {confirmDelete && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="pp-card rounded-lg p-6" style={{ maxWidth: 360, width: '90%' }}>
+            <h3 className="pp-display text-lg mb-2" style={{ fontWeight: 500 }}>Удалить линейку?</h3>
+            <p className="text-sm pp-muted mb-4">«{confirmDelete.name}» и все её артефакты будут удалены из облака. Это действие нельзя отменить.</p>
+            <div className="flex gap-2 justify-end">
+              <button className="pp-btn" onClick={() => setConfirmDelete(null)}>Отмена</button>
+              <button className="pp-btn" style={{ background: 'var(--clay)', color: '#fff', borderColor: 'var(--clay)' }}
+                onClick={() => deleteLine(confirmDelete.id)}>
+                <Trash2 size={13} /> Удалить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex" style={{ minHeight: 600 }}>
         <aside className="pp-line border-r p-4" style={{ width: 220, flexShrink: 0 }}>
           <div className="pp-display text-sm mb-4 pp-muted" style={{ letterSpacing: '0.04em', textTransform: 'uppercase' }}>Линейки молдов</div>
           {listError && (
@@ -1169,32 +1506,42 @@ export default function PipelineApp() {
           <div className="flex flex-col gap-1">
             {listLoading ? (
               [0, 1, 2].map((i) => (
-                <div
-                  key={i}
-                  style={{ height: 44, borderRadius: 8, border: '1px solid var(--line)', background: 'var(--paper)' }}
-                />
+                <div key={i} style={{ height: 44, borderRadius: 8, border: '1px solid var(--line)', background: 'var(--paper)' }} />
               ))
             ) : (
               lines.map((l) => (
-                <button
-                  key={l.id}
-                  onClick={() => { setActiveLineId(l.id); setActiveTab('results'); setActiveStep('normalize'); }}
-                  className="rounded-lg p-2 text-left"
-                  style={{ background: l.id === activeLineId ? 'var(--lavender-soft)' : 'transparent', border: '1px solid transparent', borderColor: l.id === activeLineId ? 'var(--lavender)' : 'transparent' }}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium">{l.name}</span>
-                    <span className="pp-mono text-xs pp-muted">{l.id}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <SizeLadder sizes={l.sizes} />
-                    <StatusBadge status={l.status} />
-                  </div>
-                </button>
+                <div key={l.id} className="relative group">
+                  <button
+                    onClick={() => { setActiveLineId(l.id); setActiveTab('results'); setActiveStep('normalize'); }}
+                    className="rounded-lg p-2 text-left w-full"
+                    style={{ background: l.id === activeLineId ? 'var(--lavender-soft)' : 'transparent', border: '1px solid transparent', borderColor: l.id === activeLineId ? 'var(--lavender)' : 'transparent' }}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium">{l.name}</span>
+                      <span className="pp-mono text-xs pp-muted">{l.id}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <SizeLadder sizes={l.sizes} />
+                      <StatusBadge status={l.status} />
+                    </div>
+                  </button>
+                  {/* CRUD-01: delete button, visible on hover */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setConfirmDelete({ id: l.id, name: l.name }); }}
+                    className="pp-btn-ghost"
+                    title="Удалить линейку"
+                    style={{ position: 'absolute', top: 4, right: 4, opacity: 0, transition: 'opacity 0.15s', padding: 3 }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                    onMouseLeave={e => e.currentTarget.style.opacity = '0'}
+                    aria-label={`Удалить линейку ${l.name}`}
+                  >
+                    <Trash2 size={12} style={{ color: 'var(--clay-dark)' }} aria-hidden="true" />
+                  </button>
+                </div>
               ))
             )}
           </div>
-          <button className="pp-btn mt-3 w-full" onClick={() => { setActiveTab('form'); }} style={{ justifyContent: 'center' }}>
+          <button className="pp-btn mt-3 w-full" onClick={() => { setActiveLineId(null); setActiveTab('form'); setQuestionnaireData(null); }} style={{ justifyContent: 'center' }}>
             <Plus size={14} aria-hidden="true" /> Новая линейка
           </button>
         </aside>
@@ -1207,6 +1554,7 @@ export default function PipelineApp() {
             </div>
           )}
 
+          {/* New line form (no active line) */}
           {activeTab === 'form' && !line ? (
             <QuestionnaireForm onSubmit={handleFormSubmit} loading={formLoading} />
           ) : !listLoading && !listError && lines.length === 0 ? (
@@ -1222,22 +1570,18 @@ export default function PipelineApp() {
             <div>
               <div className="flex items-center gap-3">
                 {editingName ? (
-                  <input
-                    autoFocus
-                    className="pp-display text-2xl"
+                  <input autoFocus className="pp-display text-2xl"
                     style={{ fontWeight: 500, background: 'transparent', border: 'none', borderBottom: '2px solid var(--lavender)', outline: 'none', minWidth: 120, padding: '0 2px' }}
                     value={nameInput}
                     onChange={e => setNameInput(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') saveLineName(); if (e.key === 'Escape') setEditingName(false); }}
-                    onBlur={saveLineName}
-                  />
+                    onBlur={saveLineName} />
                 ) : (
-                  <h1
-                    className="pp-display text-2xl"
-                    style={{ fontWeight: 500, cursor: 'text' }}
+                  <h1 className="pp-display text-2xl" style={{ fontWeight: 500, cursor: 'text' }}
                     title="Нажмите для переименования"
-                    onClick={() => { setNameInput(line.name); setEditingName(true); }}
-                  >{line.name}</h1>
+                    onClick={() => { setNameInput(line.name); setEditingName(true); }}>
+                    {line.name}
+                  </h1>
                 )}
                 <span className="pp-mono text-sm pp-muted">{line.id}</span>
                 <SizeLadder sizes={line.sizes} dim={5} />
@@ -1245,36 +1589,36 @@ export default function PipelineApp() {
               <p className="text-sm pp-muted mt-1">{line.theme} · {line.color}</p>
             </div>
             <div className="flex items-center gap-2">
-              <a
-                href={`/lines/${line.id}/download`}
-                download={`${line.id}.zip`}
+              <a href={`/lines/${line.id}/download`} download={`${line.id}.zip`}
                 title="Скачать все артефакты"
                 className="pp-btn pp-btn-ghost text-sm flex items-center gap-1"
-                style={{ padding: '6px 10px' }}
-              >
+                style={{ padding: '6px 10px' }}>
                 <Download size={14} /> Скачать всё
               </a>
-            <div className="flex gap-1 pp-line border rounded-lg p-1">
-              <button
-                onClick={() => setActiveTab('results')}
-                className="text-sm px-3 py-1.5 rounded-md"
-                style={{ background: activeTab === 'results' ? 'var(--lavender)' : 'transparent', color: activeTab === 'results' ? '#fff' : 'var(--ink)' }}
-              >
-                Результаты
-              </button>
-              <button
-                onClick={() => setActiveTab('form')}
-                className="text-sm px-3 py-1.5 rounded-md"
-                style={{ background: activeTab === 'form' ? 'var(--lavender)' : 'transparent', color: activeTab === 'form' ? '#fff' : 'var(--ink)' }}
-              >
-                Опросник
-              </button>
-            </div>
+              <div className="flex gap-1 pp-line border rounded-lg p-1">
+                <button onClick={() => setActiveTab('results')}
+                  className="text-sm px-3 py-1.5 rounded-md"
+                  style={{ background: activeTab === 'results' ? 'var(--lavender)' : 'transparent', color: activeTab === 'results' ? '#fff' : 'var(--ink)' }}>
+                  Результаты
+                </button>
+                {/* CRUD-02: Опросник tab loads existing questionnaire */}
+                <button onClick={() => openQuestionnaireTab(activeLineId)}
+                  className="text-sm px-3 py-1.5 rounded-md"
+                  style={{ background: activeTab === 'form' ? 'var(--lavender)' : 'transparent', color: activeTab === 'form' ? '#fff' : 'var(--ink)' }}>
+                  Опросник
+                </button>
+              </div>
             </div>
           </div>
 
+          {/* CRUD-02: edit mode for existing line */}
           {activeTab === 'form' ? (
-            <QuestionnaireForm onSubmit={handleFormSubmit} loading={formLoading} />
+            <QuestionnaireForm
+              onSubmit={handleUpdateQuestionnaire}
+              loading={formLoading}
+              initialData={questionnaireData}
+              isEdit={true}
+            />
           ) : (
             <>
               <StepperNav active={activeStep} onSelect={setActiveStep} lineId={activeLineId} manifests={manifests} line={line} runningSteps={runningSteps} />
@@ -1294,13 +1638,8 @@ export default function PipelineApp() {
                 if (activeStatus.state !== 'error') return null;
                 const errMsg = manifests[activeLineId]?.steps?.[STEP_KEY_TO_ID[activeStep]]?.error;
                 return (
-                  <div
-                    className="pp-card rounded-lg p-4 mb-3"
-                    style={{ borderColor: 'var(--clay)', background: 'var(--clay-soft)' }}
-                  >
-                    <p className="text-sm mb-3" style={{ color: 'var(--clay-dark)', lineHeight: 1.5 }}>
-                      Ошибка шага: {errMsg}
-                    </p>
+                  <div className="pp-card rounded-lg p-4 mb-3" style={{ borderColor: 'var(--clay)', background: 'var(--clay-soft)' }}>
+                    <p className="text-sm mb-3" style={{ color: 'var(--clay-dark)', lineHeight: 1.5 }}>Ошибка шага: {errMsg}</p>
                     <button className="pp-btn pp-btn-primary" onClick={handleRegenerateStep}>
                       <RotateCcw size={14} aria-hidden="true" /> Повторить шаг
                     </button>
