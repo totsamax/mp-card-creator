@@ -305,17 +305,32 @@ async function handleDownload(article) {
 
   const steps = Object.keys(manifest.steps || {}).filter(s => s !== '_meta');
   for (const stepId of steps) {
-    const version = manifest.steps[stepId]?.currentVersion;
-    if (!version) continue;
-    try {
-      const names = await store.listArtifacts(article, stepId, version);
-      for (const name of names) {
-        try {
-          const buf = await store.getArtifact(article, stepId, version, name);
-          entries.push({ name: `${article}/${stepId}/v${version}/${name}`, data: buf });
-        } catch { /* skip missing artifact */ }
-      }
-    } catch { /* skip missing step */ }
+    const stepMeta = manifest.steps[stepId];
+    const currentVersion = stepMeta?.currentVersion;
+    if (!currentVersion) continue;
+
+    // Collect all unique versions from history to include marketplace-split artifacts
+    // (e.g. 02-texts stores ozon and wb texts in separate per-regenerate versions)
+    const allVersions = new Set([currentVersion]);
+    for (const h of (stepMeta.history || [])) {
+      if (h.version) allVersions.add(h.version);
+    }
+
+    // Latest version wins for duplicate artifact names
+    const artifactVersionMap = new Map();
+    for (const v of [...allVersions].sort((a, b) => a - b)) {
+      try {
+        const names = await store.listArtifacts(article, stepId, v);
+        for (const name of names) artifactVersionMap.set(name, v);
+      } catch { /* skip missing version */ }
+    }
+
+    for (const [name, v] of artifactVersionMap) {
+      try {
+        const buf = await store.getArtifact(article, stepId, v, name);
+        entries.push({ name: `${article}/${stepId}/v${v}/${name}`, data: buf });
+      } catch { /* skip missing artifact */ }
+    }
   }
 
   const zipBuffer = await new Promise((resolve, reject) => {
