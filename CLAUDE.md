@@ -9,8 +9,7 @@
 ## Стек
 
 - **Рантайм**: Node.js (локальный HTTP-сервер), React (Vite, фронтенд)
-- **Хранилище (основное)**: Yandex Cloud — YDB Serverless (манифесты), Object Storage (артефакты)
-- **Хранилище (фолбэк)**: локальная файловая система (`./output/`) — включается автоматически при недоступности облака
+- **Хранилище**: Yandex Cloud — YDB Serverless (манифесты), Object Storage (артефакты); локального фолбэка нет намеренно
 - **Ключевые библиотеки**: `exceljs`, `@aws-sdk/client-s3`, `@aws-sdk/client-dynamodb`, встроенный `fetch`, `concurrently`
 - **AI API**: OpenAI (тексты + изображения), Anthropic Claude Vision (критик изображений), Kling.ai (видео)
 - **Фронтенд**: React + `lucide-react` + Tailwind, шрифты Fraunces/Inter/IBM Plex Mono
@@ -20,7 +19,7 @@
 ```
 layers/shared/          # общий код, подключается через SHARED_LAYER_PATH
   templateEngine.js     # формулы из template.master.json → мастер-данные
-  versionStore.js       # хранилище артефактов: cloud-with-fallback / local / yandex-cloud
+  versionStore.js       # хранилище артефактов: yandex-cloud (прод) / local (тесты)
   excelWriter.js        # генерация xlsx через exceljs
   config/               # template.master.json, ozon.column-map.json, wb.column-map.json, prompts.*.json
 
@@ -59,21 +58,16 @@ exports.handler = async (event) => { ... }
 
 Функции stateless: читают данные из `versionStore`, пишут туда же. Никакого глобального состояния.
 
-### versionStore — три режима
+### versionStore — два режима
 
 `STORE_ADAPTER` управляет поведением:
 
 | Значение | Поведение |
 |---|---|
-| `cloud-with-fallback` **(дефолт)** | пишет и читает из YDB + Object Storage; при любой ошибке сети/авторизации прозрачно переключается на локальный диск |
-| `yandex-cloud` | только облако, ошибки не глотает |
-| `local` | только локальный диск (`OUTPUT_DIR`, дефолт `./output/`) |
+| `yandex-cloud` **(дефолт)** | YDB + Object Storage; ошибки облака не глотаются |
+| `local` | только локальный диск (`OUTPUT_DIR`, дефолт `./output/`) — только для тестов |
 
-**Логика фолбэка в `cloud-with-fallback`:**
-
-- каждый вызов оборачивается в try/catch
-- при ошибке — `console.warn('[versionStore] cloud unavailable, falling back to local:', err.message)` и повтор через local-адаптер
-- фолбэк per-call, не sticky: следующий вызов снова пробует облако
+Локального фолбэка нет намеренно: ошибки облака должны быть видны явно.
 
 Для работы с Yandex Cloud нужны переменные окружения (см. `.env.example`):
 
@@ -142,12 +136,11 @@ OPENAI_API_KEY=...
 ANTHROPIC_API_KEY=...
 KLING_API_KEY=...
 
-# Хранилище — облако с фолбэком на диск (дефолт)
+# Хранилище (дефолт — yandex-cloud; local только для тестов)
 
-STORE_ADAPTER=cloud-with-fallback
-OUTPUT_DIR=./output            # куда пишет фолбэк
+STORE_ADAPTER=yandex-cloud
 
-# Yandex Cloud (нужны для основного пути)
+# Yandex Cloud
 
 YDB_DOCUMENT_API_ENDPOINT=...
 YDB_TABLE_NAME=mold-manifests
@@ -161,7 +154,7 @@ AWS_SECRET_ACCESS_KEY=...
 - [x] Архитектура и схема версионирования
 - [x] `layers/shared/config/template.master.json`
 - [x] `layers/shared/templateEngine.js`
-- [x] `layers/shared/versionStore.js` (local + yandex-cloud + cloud-with-fallback адаптеры)
+- [x] `layers/shared/versionStore.js` (local + yandex-cloud адаптеры)
 - [x] `layers/shared/excelWriter.js` + `ozon.column-map.json` + `wb.column-map.json`
 - [x] `functions/api/index.js`
 - [x] `functions/step-normalize`, `step-texts`, `step-images`, `step-excel`, `step-assemble`, `step-video`
@@ -197,7 +190,7 @@ POST /lines
 
 - **Tech stack**: Node.js / CommonJS, React + Vite, без TypeScript — не менять
 - **AI API**: OpenAI (тексты + изображения), Anthropic Claude Vision (критик), Kling.ai (видео)
-- **Storage**: Yandex Cloud с локальным фолбэком — архитектура уже выбрана
+- **Storage**: Yandex Cloud (YDB + Object Storage) — без локального фолбэка намеренно
 - **Локальная разработка**: без YMQ — retry-циклы должны работать через прямой вызов хэндлера
 - **Slide шаблон**: структура слайдов зафиксирована (есть примеры) — AI генерирует контент, не структуру
 
@@ -265,11 +258,9 @@ POST /lines
 
 # AI
 
-# Storage adapter
+# Storage adapter (yandex-cloud / local)
 
-# Local fallback
-
-# Yandex Cloud (needed for cloud adapters)
+# Yandex Cloud
 
 # Optional
 
@@ -311,7 +302,7 @@ POST /lines
 - `[versionStore]` — `layers/shared/versionStore.js`
 - `[step-texts]` — `functions/step-texts/index.js`
 - `console.error` — unhandled exceptions and fatal errors
-- `console.warn` — degraded mode (cloud unavailable, LLM unavailable, fallback engaged)
+- `console.warn` — degraded mode (LLM unavailable, etc.)
 - `console.log` — successful local step execution progress
 
 ## Async Patterns
@@ -386,9 +377,8 @@ POST /lines
 
 ### Storage Adapter Pattern
 
-- `local`: filesystem at `OUTPUT_DIR`
-- `yandex-cloud`: YDB (DynamoDB compat.) + Object Storage (S3 compat.)
-- `cloud-with-fallback` (default): wraps every `yandex-cloud` call in try/catch, falls back to `local` per-call on any error
+- `yandex-cloud` (default): YDB (DynamoDB compat.) + Object Storage (S3 compat.)
+- `local`: filesystem at `OUTPUT_DIR` — tests only
 
 ### Input Hash Cache
 
@@ -432,7 +422,7 @@ POST /lines
 ## Error Handling
 
 - Top-level `try/catch` in `exports.handler` → returns `{ statusCode: 500, error: err.message }`
-- Store operations: cloud adapter errors → per-call fallback to local (logged as `console.warn`)
+- Store operations: cloud adapter errors propagate as exceptions (no fallback by design)
 - Critic failures in 03-images → treated as `ok: true` to avoid blocking (explicitly noted in code)
 - AI API failures → step returns 500 (caller can retry via regenerate endpoint)
 
