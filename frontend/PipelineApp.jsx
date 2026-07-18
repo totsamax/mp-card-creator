@@ -74,6 +74,8 @@ const STYLES = `
 .pp-btn-primary:hover { background: var(--lavender-dark); }
 .pp-btn-ghost { border: none; background: transparent; padding: 4px; }
 .pp-btn-ghost:hover { background: var(--lavender-soft); }
+.pp-line-group .pp-line-delete { opacity: 0; transition: opacity 0.15s; }
+.pp-line-group:hover .pp-line-delete { opacity: 1; }
 @keyframes pp-spin { to { transform: rotate(360deg); } }
 `;
 
@@ -1520,7 +1522,7 @@ export default function PipelineApp() {
               ))
             ) : (
               lines.map((l) => (
-                <div key={l.id} className="relative group">
+                <div key={l.id} className="relative group pp-line-group">
                   <button
                     onClick={() => { setActiveLineId(l.id); setActiveTab('results'); setActiveStep('normalize'); }}
                     className="rounded-lg p-2 text-left w-full"
@@ -1538,11 +1540,9 @@ export default function PipelineApp() {
                   {/* CRUD-01: delete button, visible on hover */}
                   <button
                     onClick={(e) => { e.stopPropagation(); setConfirmDelete({ id: l.id, name: l.name }); }}
-                    className="pp-btn-ghost"
+                    className="pp-btn-ghost pp-line-delete"
                     title="Удалить линейку"
-                    style={{ position: 'absolute', top: 4, right: 4, opacity: 0, transition: 'opacity 0.15s', padding: 3 }}
-                    onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-                    onMouseLeave={e => e.currentTarget.style.opacity = '0'}
+                    style={{ position: 'absolute', top: 4, right: 4, padding: 3 }}
                     aria-label={`Удалить линейку ${l.name}`}
                   >
                     <Trash2 size={12} style={{ color: 'var(--clay-dark)' }} aria-hidden="true" />
