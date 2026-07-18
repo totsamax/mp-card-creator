@@ -1290,7 +1290,7 @@ export default function PipelineApp() {
 
   useEffect(() => { if (activeLineId) refreshManifest(activeLineId); }, [activeLineId, refreshManifest]);
 
-  const line         = lines.find((l) => l.id === activeLineId) ?? lines[0] ?? null;
+  const line         = activeLineId ? (lines.find((l) => l.id === activeLineId) ?? null) : null;
   const versions     = manifests[activeLineId] ? manifestToVersions(manifests[activeLineId]) : {};
   const stepVersions = versions[activeStep] || [];
   const currentVersion = versionState[`${activeLineId}.${activeStep}`] ?? stepVersions[stepVersions.length - 1]?.v;

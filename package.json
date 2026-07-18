@@ -7,11 +7,14 @@
     "api": "node infra/local-server.js",
     "dev": "concurrently \"npm run api\" \"npm run --prefix frontend dev\"",
     "test": "node --test 'test/**/*.test.js'",
+    "test:crud": "node --test test/api-crud.test.js",
     "test:e2e": "node --test test/e2e.test.js",
+    "test:ui": "RUN_PLAYWRIGHT=1 npx playwright test",
     "deploy": "node infra/deploy.js",
     "deploy:fn": "node infra/deploy.js"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "concurrently": "^9.2.1"
   },
   "repository": {
