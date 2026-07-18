@@ -131,8 +131,8 @@ exports.handler = async (event) => {
 // Prompt building (image-in-image composition)
 // ---------------------------------------------------------------------------
 
-function substitutePrompt(sizeRecord, imageType) {
-  const tmpl = promptsTmpl.prompts[imageType] || promptsTmpl.prompts.infographic;
+function substitutePrompt(sizeRecord, imageType, templateOverride) {
+  const tmpl = templateOverride || promptsTmpl.prompts[imageType] || promptsTmpl.prompts.infographic;
   return tmpl
     .replace(/\{\{moldName\}\}/g,   sizeRecord.moldName)
     .replace(/\{\{moldSize\}\}/g,   sizeRecord.moldSize)
@@ -162,7 +162,8 @@ async function resolveSlidePrompt(article, slideKey, sizeRecord) {
     const slides   = manifest?.steps?.[STEP_ID]?.slidesConfig?.slides;
     const slide    = Array.isArray(slides) ? slides.find(s => s.id === slideKey) : null;
     if (slide && typeof slide.generatedPrompt === 'string' && slide.generatedPrompt.trim().length > 0) {
-      return slide.generatedPrompt;
+      // Run substitutePrompt to resolve any {{tokens}} left in default/stored templates
+      return substitutePrompt(sizeRecord, slideKey, slide.generatedPrompt);
     }
   } catch (err) {
     console.warn('[step-images] could not read slidesConfig, using default prompt:', err.message);
@@ -238,23 +239,28 @@ async function generateImageApiframe(article, prompt) {
   const apiKey = process.env.OPENAI_API_KEY;
   const model  = OPENAI_IMAGE_MODEL;
 
-  // Try to pass the mold photo as base64 data URL for image-in-image generation
+  // Pass mold photo as HTTPS URL only when bucket is public (apiframe requires public HTTPS).
+  // Set YC_BUCKET_PUBLIC=true + YC_BUCKET_NAME in .env.local after making the bucket public.
   let inputImages;
-  try {
-    const photoNames = await store.listArtifacts(article, 'photos', 1);
-    if (photoNames && photoNames.length > 0) {
-      const photoBuf = await store.getArtifact(article, 'photos', 1, photoNames[0]);
-      const ext = photoNames[0].split('.').pop().toLowerCase();
-      const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/png';
-      inputImages = `data:${mime};base64,${photoBuf.toString('base64')}`;
-      console.log(`[step-images] passing mold photo (${photoBuf.length}b) to apiframe`);
+  const ycBucket  = process.env.YC_BUCKET_NAME;
+  const bucketPub = process.env.YC_BUCKET_PUBLIC === 'true';
+  if (ycBucket && bucketPub) {
+    try {
+      const photoNames = await store.listArtifacts(article, 'photos', 1);
+      if (photoNames && photoNames.length > 0) {
+        const photoUrl = `https://storage.yandexcloud.net/${ycBucket}/${article}/photos/1/${photoNames[0]}`;
+        inputImages = photoUrl;
+        console.log(`[step-images] passing mold photo URL to apiframe: ${photoUrl}`);
+      }
+    } catch (err) {
+      console.warn('[step-images] could not resolve mold photo URL, generating text-only:', err.message);
     }
-  } catch (err) {
-    console.warn('[step-images] could not load mold photo, generating text-only:', err.message);
+  } else if (ycBucket && !bucketPub) {
+    console.log('[step-images] YC_BUCKET_PUBLIC not set — generating text-only (set YC_BUCKET_PUBLIC=true to enable photo reference)');
   }
 
   const gptImage2Params = { quality: 'auto', background: 'opaque', number_of_images: 1 };
-  if (inputImages) gptImage2Params.input_images = inputImages;
+  if (inputImages) gptImage2Params.input_images = [inputImages];
 
   const submitRes = await fetch('https://api.apiframe.ai/v2/images/generate', {
     method:  'POST',

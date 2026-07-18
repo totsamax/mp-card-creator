@@ -33,14 +33,28 @@ exports.handler = async (event) => {
 
   for (const [stepId, meta] of Object.entries(manifest.steps || {})) {
     if (stepId === STEP_ID) continue;
-    const version  = meta.currentVersion;
-    if (!version) continue;
+    const currentVersion = meta.currentVersion;
+    if (!currentVersion) continue;
 
-    const artifacts = await store.listArtifacts(article, stepId, version);
+    // Collect all unique versions from history to cover marketplace-split artifacts
+    const allVersions = new Set([currentVersion]);
+    for (const h of (meta.history || [])) {
+      if (h.version) allVersions.add(h.version);
+    }
+
+    const artifactVersionMap = new Map();
+    for (const v of [...allVersions].sort((a, b) => a - b)) {
+      try {
+        const names = await store.listArtifacts(article, stepId, v);
+        for (const name of names) artifactVersionMap.set(name, v);
+      } catch { /* skip */ }
+    }
+
+    const artifacts = [...artifactVersionMap.keys()];
     const stepNeedReview = meta.history?.slice(-1)[0]?.needsReview ?? false;
 
     tree[stepId] = {
-      version,
+      version: currentVersion,
       artifacts,
       needsReview: stepNeedReview,
     };
